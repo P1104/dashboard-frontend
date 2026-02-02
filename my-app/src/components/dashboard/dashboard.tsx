@@ -1,12 +1,14 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable react-hooks/exhaustive-deps */
 
 "use client";
-
-import React, { useEffect, useRef, useState } from "react";
+import React, { useRef, useState } from "react";
 import ReactECharts from "echarts-for-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../ui/card";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
+import { Toaster } from "../ui/sonner";
+import { toast } from "sonner";
 import {
   LayoutDashboard,
   Calendar,
@@ -15,16 +17,19 @@ import {
   FileText,
   Printer,
   Download,
-  
   Upload,
   FileSpreadsheet,
   Globe,
+  X,
+  File,
+  ArrowLeft,
 } from "lucide-react";
 
 import * as htmlToImage from "html-to-image";
 import jsPDF from "jspdf";
 import * as XLSX from "xlsx";
 import { useDashboardStore } from "@/src/services/api/dashboard/dashboard-store";
+import { QueryInput } from "@/src/components/dashboard/QueryInput";
 
 const SequentialLoader = () => {
   const messages = [
@@ -35,7 +40,7 @@ const SequentialLoader = () => {
   ];
   const [step, setStep] = useState(0);
 
-  useEffect(() => {
+  React.useEffect(() => {
     const interval = setInterval(() => {
       setStep((prev) => (prev + 1) % messages.length);
     }, 5000);
@@ -50,115 +55,115 @@ const SequentialLoader = () => {
   );
 };
 
-export  function SalesDashboard() {
+interface UploadedFile {
+  name: string;
+  size: number;
+  type: string;
+  uploadedAt: Date;
+}
+
+export function SalesDashboard() {
   const cardRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isExporting, setIsExporting] = useState(false);
   const [showDownloadMenu, setShowDownloadMenu] = useState(false);
+  const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
 
-  const { loading, dashboardData, kpis, calculateKPIs } = useDashboardStore();
+  const { loading, hasData, dashboardData, fetchDashboardData, resetDashboard } = useDashboardStore();
 
-  useEffect(() => {
-    calculateKPIs();
-  }, []);
+  console.log('📊 Dashboard State:', {
+    loading,
+    hasData,
+    kpisCount: dashboardData.kpis?.length || 0,
+    chartsCount: dashboardData.charts?.length || 0,
+    dashboardData: dashboardData
+  });
 
-  // Chart Options
-  const productLineChartOption = {
-    title: { text: "Sales by Product Line", left: "center" },
-    tooltip: { trigger: "item", formatter: "{a} <br/>{b}: ₹{c} ({d}%)" },
-    legend: { orient: "vertical", left: "left" },
-    series: [
-      {
-        name: "Product Sales",
-        type: "pie",
-        radius: "50%",
-        data: dashboardData.productLineSales.map((item) => ({ value: item.value, name: item.name })),
-        emphasis: { itemStyle: { shadowBlur: 10, shadowOffsetX: 0, shadowColor: "rgba(0, 0, 0, 0.5)" } },
-      },
-    ],
-  };
+  // Dynamic chart rendering function - ALL CONTENT FROM BACKEND
+ // Update the renderChart function to handle doughnut charts
+const renderChart = (chartOption: any, index: number) => {
+  console.log(`📈 Rendering chart ${index}:`, {
+    title: chartOption.title?.text,
+    seriesType: chartOption.series?.[0]?.type,
+    dataLength: chartOption.series?.[0]?.data?.length
+  });
+  
+  // Fix chart option if it has doughnut type (ECharts uses pie with radius)
+  const fixedChartOption = { ...chartOption };
+  
+  if (fixedChartOption.series) {
+    fixedChartOption.series = fixedChartOption.series.map((series: any) => {
+      if (series.type === 'doughnut') {
+        return {
+          ...series,
+          type: 'pie',
+          radius: ['40%', '70%'] // This creates a doughnut effect
+        };
+      }
+      return series;
+    });
+  }
+  
+  return (
+    <Card key={index} className="shadow-sm chart-container">
+      <CardHeader>
+        {/* Chart Title from backend */}
+        <CardTitle>{fixedChartOption.title?.text || `Chart ${index + 1}`}</CardTitle>
+        {/* Chart Description can be derived from tooltip or other properties */}
+        <CardDescription>
+          {fixedChartOption.tooltip?.formatter 
+            ? `Interactive chart showing ${fixedChartOption.title?.text?.toLowerCase() || 'data'}`
+            : "Data visualization"}
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <ReactECharts 
+          option={fixedChartOption} 
+          style={{ height: "400px" }} 
+          opts={{ renderer: 'canvas' }}
+        />
+      </CardContent>
+    </Card>
+  );
+};
 
-  const monthlyTrendOption = {
-    title: { text: "Monthly Sales Trend", left: "center" },
-    tooltip: { trigger: "axis" },
-    legend: { data: ["Sales", "Transactions"], top: 30 },
-    xAxis: { type: "category", data: dashboardData.monthlyData.map((d) => d.month) },
-    yAxis: [
-      { type: "value", name: "Sales (₹)", position: "left" },
-      { type: "value", name: "Transactions", position: "right" },
-    ],
-    series: [
-      {
-        name: "Sales",
-        type: "line",
-        yAxisIndex: 0,
-        data: dashboardData.monthlyData.map((d) => d.sales),
-        smooth: true,
-        lineStyle: { width: 3 },
-      },
-      {
-        name: "Transactions",
-        type: "bar",
-        yAxisIndex: 1,
-        data: dashboardData.monthlyData.map((d) => d.transactions),
-      },
-    ],
-  };
+  // Dynamic KPI card rendering - ALL CONTENT FROM BACKEND
+  const renderKPICard = (kpi: any, index: number) => {
+    console.log(`📊 Rendering KPI ${index}:`, kpi);
+    
+    // Determine badge based on KPI title from backend
+    let badgeVariant: "secondary" | "outline" | "default" | "destructive" = "secondary";
+    let badgeIcon = "📊";
+    
+    if (kpi.title.includes("Sales") || kpi.title.includes("Revenue")) {
+      badgeVariant = "secondary";
+      badgeIcon = "₹";
+    } else if (kpi.title.includes("Transaction") || kpi.title.includes("Count")) {
+      badgeVariant = "outline";
+      badgeIcon = "#";
+    } else if (kpi.title.includes("Rating") || kpi.title.includes("Score")) {
+      badgeVariant = "default";
+      badgeIcon = "⭐";
+    } else if (kpi.title.includes("Profit") || kpi.title.includes("Income") || kpi.title.includes("Margin")) {
+      badgeVariant = "destructive";
+      badgeIcon = "💰";
+    }
 
-  const branchComparisonOption = {
-    title: { text: "Branch Performance", left: "center" },
-    tooltip: { trigger: "axis", axisPointer: { type: "shadow" } },
-    legend: { data: ["Sales", "Transactions"], top: 30 },
-    xAxis: { type: "category", data: dashboardData.branchData.map((d) => `${d.branch} (${d.city})`) },
-    yAxis: [{ type: "value", name: "Sales (₹)" }, { type: "value", name: "Transactions" }],
-    series: [
-      {
-        name: "Sales",
-        type: "bar",
-        yAxisIndex: 0,
-        data: dashboardData.branchData.map((d) => d.sales),
-        itemStyle: { color: "#5470c6" },
-      },
-      {
-        name: "Transactions",
-        type: "bar",
-        yAxisIndex: 1,
-        data: dashboardData.branchData.map((d) => d.transactions),
-        itemStyle: { color: "#91cc75" },
-      },
-    ],
-  };
-
-  const customerSegmentOption = {
-    title: { text: "Customer Segment Analysis", left: "center" },
-    tooltip: { trigger: "axis", axisPointer: { type: "shadow" } },
-    xAxis: { type: "category", data: dashboardData.customerData.map((d) => `${d.type} ${d.gender}`) },
-    yAxis: { type: "value", name: "Sales (₹)" },
-    series: [
-      {
-        name: "Sales",
-        type: "bar",
-        data: dashboardData.customerData.map((d) => d.sales),
-        itemStyle: { color: "#ee6666" },
-      },
-    ],
-  };
-
-  const paymentMethodOption = {
-    title: { text: "Payment Method Distribution", left: "center" },
-    tooltip: { trigger: "item" },
-    series: [
-      {
-        name: "Payment Methods",
-        type: "pie",
-        radius: ["40%", "70%"],
-        avoidLabelOverlap: false,
-        label: { show: false, position: "center" },
-        emphasis: { label: { show: true, fontSize: "30", fontWeight: "bold" } },
-        labelLine: { show: false },
-        data: dashboardData.paymentData.map((item) => ({ value: item.sales, name: item.method })),
-      },
-    ],
+    return (
+      <Card key={index} className="shadow-sm">
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          {/* KPI Title from backend */}
+          <CardTitle className="text-sm font-medium text-slate-600">{kpi.title}</CardTitle>
+          <Badge variant={badgeVariant}>{badgeIcon}</Badge>
+        </CardHeader>
+        <CardContent>
+          {/* KPI Value from backend */}
+          <div className="text-2xl font-bold text-black">{kpi.value}</div>
+          {/* KPI Description from backend */}
+          <p className="text-xs text-muted-foreground">{kpi.description}</p>
+        </CardContent>
+      </Card>
+    );
   };
 
   const downloadFile = (blob: Blob, filename: string) => {
@@ -174,152 +179,16 @@ export  function SalesDashboard() {
   };
 
   const showSuccessMessage = (format: string) => {
-    const message = document.createElement("div");
-    message.className = "fixed bottom-4 right-4 bg-indigo-600 text-white px-6 py-3 rounded-lg shadow-lg z-[100]";
-    message.innerHTML = `
-      <div class="flex items-center gap-2">
-        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-        </svg>
-        <span class="font-medium">${format} downloaded successfully!</span>
-      </div>
-    `;
-    document.body.appendChild(message);
-    setTimeout(() => message.remove(), 3000);
-  };
-
-  const handleExcelExport = async () => {
-    try {
-      setIsExporting(true);
-      
-      // Prepare data for Python script
-      const exportData = {
-        kpis,
-        dashboardData,
-        outputFile: `Supermarket-Sales-Dashboard-${Date.now()}.xlsx`
-      };
-      
-      // Create FormData to send to backend
-      const formData = new FormData();
-      formData.append('data', JSON.stringify(exportData));
-      
-      // Call backend API to generate Excel with charts
-      const response = await fetch('/api/generate-excel-dashboard', {
-        method: 'POST',
-        body: formData,
-      });
-      
-      if (!response.ok) {
-        throw new Error('Excel generation failed');
-      }
-      
-      // Download the file
-      const blob = await response.blob();
-      downloadFile(blob, exportData.outputFile);
-      showSuccessMessage("Excel Dashboard with Charts");
-    } catch (error) {
-      console.error("Excel export failed:", error);
-      
-      // Fallback to basic XLSX export if backend fails
-      try {
-        const wb = XLSX.utils.book_new();
-        
-        // Dashboard Summary Sheet
-        const summaryData = [
-          ["SUPERMARKET SALES DASHBOARD"],
-          [],
-          ["KEY PERFORMANCE INDICATORS"],
-          ["Total Sales", `₹${kpis.totalSales.toLocaleString()}`],
-          ["Total Transactions", kpis.totalTransactions.toLocaleString()],
-          ["Average Transaction Value", `₹${kpis.averageTransactionValue.toFixed(2)}`],
-          ["Average Rating", `${kpis.avgRating.toFixed(2)}/10`],
-          [],
-          ["PRODUCT LINE SALES"],
-          ["Product Line", "Sales (₹)", "Transactions", "Avg Value (₹)"],
-          ...dashboardData.productLineSales.map((item) => [
-            item.name,
-            item.value,
-            item.transactions,
-            item.avgValue,
-          ]),
-          [],
-          ["BRANCH PERFORMANCE"],
-          ["Branch", "City", "Sales (₹)", "Transactions", "Rating"],
-          ...dashboardData.branchData.map((item) => [
-            item.branch,
-            item.city,
-            item.sales,
-            item.transactions,
-            item.rating,
-          ]),
-          [],
-          ["MONTHLY TRENDS"],
-          ["Month", "Sales (₹)", "Transactions"],
-          ...dashboardData.monthlyData.map((item) => [item.month, item.sales, item.transactions]),
-          [],
-          ["CUSTOMER SEGMENTS"],
-          ["Type", "Gender", "Sales (₹)", "Transactions", "Rating"],
-          ...dashboardData.customerData.map((item) => [
-            item.type,
-            item.gender,
-            item.sales,
-            item.transactions,
-            item.rating,
-          ]),
-          [],
-          ["PAYMENT METHODS"],
-          ["Payment Method", "Sales (₹)", "Transactions"],
-          ...dashboardData.paymentData.map((item) => [item.method, item.sales, item.transactions]),
-          [],
-          ["KEY INSIGHTS"],
-          ["• Food & Beverages leads in total sales (₹56,145)"],
-          ["• Naypyitaw branch has highest sales (₹1,10,569) and rating (7.1/10)"],
-          ["• March showed strong recovery with ₹1,09,456 in sales"],
-          ["• Cash remains the preferred payment method (34.7% of total sales)"],
-        ];
-        
-        const summarySheet = XLSX.utils.aoa_to_sheet(summaryData);
-        
-        // Style the summary sheet
-        summarySheet['!cols'] = [
-          { wch: 30 },
-          { wch: 20 },
-          { wch: 15 },
-          { wch: 15 },
-          { wch: 10 }
-        ];
-        
-        XLSX.utils.book_append_sheet(wb, summarySheet, "Dashboard");
-        
-        // Individual data sheets for reference
-        const productSheet = XLSX.utils.json_to_sheet(dashboardData.productLineSales);
-        XLSX.utils.book_append_sheet(wb, productSheet, "Product Lines");
-        
-        const branchSheet = XLSX.utils.json_to_sheet(dashboardData.branchData);
-        XLSX.utils.book_append_sheet(wb, branchSheet, "Branches");
-        
-        const monthlySheet = XLSX.utils.json_to_sheet(dashboardData.monthlyData);
-        XLSX.utils.book_append_sheet(wb, monthlySheet, "Monthly Data");
-        
-        const customerSheet = XLSX.utils.json_to_sheet(dashboardData.customerData);
-        XLSX.utils.book_append_sheet(wb, customerSheet, "Customer Segments");
-        
-        const paymentSheet = XLSX.utils.json_to_sheet(dashboardData.paymentData);
-        XLSX.utils.book_append_sheet(wb, paymentSheet, "Payment Methods");
-        
-        XLSX.writeFile(wb, `Supermarket-Sales-Dashboard-${Date.now()}.xlsx`);
-        showSuccessMessage("Excel (Basic)");
-      } catch (fallbackError) {
-        console.error("Fallback export also failed:", fallbackError);
-        alert("Failed to export Excel. Please try again.");
-      }
-    } finally {
-      setIsExporting(false);
-    }
+    toast.success(`${format} downloaded successfully!`, {
+      duration: 3000,
+      position: "top-center",
+    });
   };
 
   const handleHTMLExport = () => {
     try {
+      const { kpis, charts } = dashboardData;
+      
       const htmlContent = `
 <!DOCTYPE html>
 <html lang="en">
@@ -349,13 +218,14 @@ export  function SalesDashboard() {
     .kpi-value { font-size: 1.875rem; font-weight: bold; color: #1e293b; }
     .section { background: white; padding: 25px; border-radius: 12px; margin-bottom: 25px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
     .section-title { font-size: 1.25rem; font-weight: 600; margin-bottom: 15px; color: #1e293b; }
-    table { width: 100%; border-collapse: collapse; }
-    th, td { padding: 12px; text-align: left; border-bottom: 1px solid #e2e8f0; }
-    th { background: #f1f5f9; font-weight: 600; color: #475569; }
-    tr:hover { background: #f8fafc; }
-    .insights { display: grid; gap: 15px; }
-    .insight { padding: 15px; background: #f8fafc; border-radius: 8px; border-left: 4px solid #6366f1; }
-    .insight-title { font-weight: 600; margin-bottom: 5px; }
+    .chart-container { 
+      margin: 20px 0; 
+      padding: 20px; 
+      background: white; 
+      border-radius: 12px; 
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1); 
+    }
+    .chart-title { font-size: 1.125rem; font-weight: 600; margin-bottom: 10px; color: #1e293b; }
     .footer { text-align: center; color: #94a3b8; margin-top: 30px; padding-top: 20px; border-top: 1px solid #e2e8f0; }
   </style>
 </head>
@@ -365,185 +235,27 @@ export  function SalesDashboard() {
     <p class="subtitle">Comprehensive sales analytics and performance insights</p>
     
     <div class="kpi-grid">
-      <div class="kpi-card">
-        <div class="kpi-title">Total Sales</div>
-        <div class="kpi-value">₹${kpis.totalSales.toLocaleString()}</div>
-      </div>
-      <div class="kpi-card">
-        <div class="kpi-title">Total Transactions</div>
-        <div class="kpi-value">${kpis.totalTransactions.toLocaleString()}</div>
-      </div>
-      <div class="kpi-card">
-        <div class="kpi-title">Avg Transaction</div>
-        <div class="kpi-value">₹${kpis.averageTransactionValue.toFixed(0)}</div>
-      </div>
-      <div class="kpi-card">
-        <div class="kpi-title">Avg Rating</div>
-        <div class="kpi-value">${kpis.avgRating.toFixed(1)}/10</div>
-      </div>
-    </div>
-
-    <div class="section">
-      <h2 class="section-title">Product Line Sales</h2>
-      <table>
-        <thead>
-          <tr>
-            <th>Product Line</th>
-            <th>Sales (₹)</th>
-            <th>Transactions</th>
-            <th>Avg Value (₹)</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${dashboardData.productLineSales
-            .map(
-              (item) => `
-            <tr>
-              <td>${item.name}</td>
-              <td>₹${item.value.toLocaleString()}</td>
-              <td>${item.transactions}</td>
-              <td>₹${item.avgValue.toFixed(2)}</td>
-            </tr>
-          `
-            )
-            .join("")}
-        </tbody>
-      </table>
-    </div>
-
-    <div class="section">
-      <h2 class="section-title">Branch Performance</h2>
-      <table>
-        <thead>
-          <tr>
-            <th>Branch</th>
-            <th>City</th>
-            <th>Sales (₹)</th>
-            <th>Transactions</th>
-            <th>Rating</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${dashboardData.branchData
-            .map(
-              (item) => `
-            <tr>
-              <td>${item.branch}</td>
-              <td>${item.city}</td>
-              <td>₹${item.sales.toLocaleString()}</td>
-              <td>${item.transactions}</td>
-              <td>${item.rating.toFixed(2)}/10</td>
-            </tr>
-          `
-            )
-            .join("")}
-        </tbody>
-      </table>
-    </div>
-
-    <div class="section">
-      <h2 class="section-title">Monthly Sales Trends</h2>
-      <table>
-        <thead>
-          <tr>
-            <th>Month</th>
-            <th>Sales (₹)</th>
-            <th>Transactions</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${dashboardData.monthlyData
-            .map(
-              (item) => `
-            <tr>
-              <td>${item.month}</td>
-              <td>₹${item.sales.toLocaleString()}</td>
-              <td>${item.transactions}</td>
-            </tr>
-          `
-            )
-            .join("")}
-        </tbody>
-      </table>
-    </div>
-
-    <div class="section">
-      <h2 class="section-title">Customer Segments</h2>
-      <table>
-        <thead>
-          <tr>
-            <th>Type</th>
-            <th>Gender</th>
-            <th>Sales (₹)</th>
-            <th>Transactions</th>
-            <th>Rating</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${dashboardData.customerData
-            .map(
-              (item) => `
-            <tr>
-              <td>${item.type}</td>
-              <td>${item.gender}</td>
-              <td>₹${item.sales.toLocaleString()}</td>
-              <td>${item.transactions}</td>
-              <td>${item.rating.toFixed(2)}/10</td>
-            </tr>
-          `
-            )
-            .join("")}
-        </tbody>
-      </table>
-    </div>
-
-    <div class="section">
-      <h2 class="section-title">Payment Methods</h2>
-      <table>
-        <thead>
-          <tr>
-            <th>Payment Method</th>
-            <th>Sales (₹)</th>
-            <th>Transactions</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${dashboardData.paymentData
-            .map(
-              (item) => `
-            <tr>
-              <td>${item.method}</td>
-              <td>₹${item.sales.toLocaleString()}</td>
-              <td>${item.transactions}</td>
-            </tr>
-          `
-            )
-            .join("")}
-        </tbody>
-      </table>
-    </div>
-
-    <div class="section">
-      <h2 class="section-title">Key Insights</h2>
-      <div class="insights">
-        <div class="insight">
-          <div class="insight-title">Top Performer</div>
-          <p>Food & Beverages leads in total sales (₹56,145)</p>
+      ${kpis.map(kpi => `
+        <div class="kpi-card">
+          <div class="kpi-title">${kpi.title}</div>
+          <div class="kpi-value">${kpi.value}</div>
+          <p class="kpi-description">${kpi.description}</p>
         </div>
-        <div class="insight">
-          <div class="insight-title">Best Branch</div>
-          <p>Naypyitaw branch has highest sales (₹1,10,569) and rating (7.1/10)</p>
-        </div>
-        <div class="insight">
-          <div class="insight-title">Growth</div>
-          <p>March showed strong recovery with ₹1,09,456 in sales</p>
-        </div>
-        <div class="insight">
-          <div class="insight-title">Payment</div>
-          <p>Cash remains the preferred payment method (34.7% of total sales)</p>
+      `).join('')}
+    </div>
+
+    ${charts.map((chart, index) => `
+      <div class="section">
+        <h2 class="section-title">${chart.title?.text || `Chart ${index + 1}`}</h2>
+        <div class="chart-container">
+          <!-- Chart ${index + 1}: ${chart.title?.text} -->
+          <p><em>Note: Charts are rendered dynamically in the application. This HTML export contains data summaries only.</em></p>
+          ${chart.series && chart.series[0] && chart.series[0].data ? `
+            <p>Data Points: ${JSON.stringify(chart.series[0].data)}</p>
+          ` : ''}
         </div>
       </div>
-    </div>
+    `).join('')}
 
     <div class="footer">
       Generated on ${new Date().toLocaleDateString()} at ${new Date().toLocaleTimeString()}
@@ -558,7 +270,68 @@ export  function SalesDashboard() {
       showSuccessMessage("HTML");
     } catch (error) {
       console.error("HTML export failed:", error);
-      alert("Failed to export HTML. Please try again.");
+      toast.error("Failed to export HTML. Please try again.", {
+        duration: 3000,
+        position: "top-center",
+      });
+    }
+  };
+
+  const handleExcelExport = async () => {
+    try {
+      setIsExporting(true);
+      
+      const { kpis, charts } = dashboardData;
+      
+      const wb = XLSX.utils.book_new();
+      
+      // Dashboard Summary Sheet
+      const summaryData = [
+        ["SUPERMARKET SALES DASHBOARD"],
+        [],
+        ["KEY PERFORMANCE INDICATORS"],
+        ...kpis.map(kpi => [kpi.title, kpi.value, kpi.description]),
+        [],
+        ["CHART SUMMARIES"],
+      ];
+      
+      charts.forEach((chart, index) => {
+        summaryData.push([]);
+        summaryData.push([chart.title?.text || `Chart ${index + 1}`]);
+        
+        if (chart.series && chart.series[0] && chart.series[0].data) {
+          summaryData.push(["Data Points:"]);
+          chart.series[0].data.forEach((item: any) => {
+            if (typeof item === 'object') {
+              summaryData.push([item.name || 'Item', item.value || 'Value']);
+            } else {
+              summaryData.push([`Data Point`, item]);
+            }
+          });
+        }
+      });
+      
+      const summarySheet = XLSX.utils.aoa_to_sheet(summaryData);
+      
+      // Style the summary sheet
+      summarySheet['!cols'] = [
+        { wch: 30 },
+        { wch: 20 },
+        { wch: 40 }
+      ];
+      
+      XLSX.utils.book_append_sheet(wb, summarySheet, "Dashboard Summary");
+      
+      XLSX.writeFile(wb, `Supermarket-Sales-Dashboard-${Date.now()}.xlsx`);
+      showSuccessMessage("Excel");
+    } catch (error) {
+      console.error("Excel export failed:", error);
+      toast.error("Failed to export Excel. Please try again.", {
+        duration: 3000,
+        position: "top-center",
+      });
+    } finally {
+      setIsExporting(false);
     }
   };
 
@@ -636,7 +409,10 @@ export  function SalesDashboard() {
 
           const printWindow = window.open("", "_blank");
           if (!printWindow) {
-            alert("Please allow popups to print");
+            toast.error("Please allow popups to print", {
+              duration: 3000,
+              position: "top-center",
+            });
             break;
           }
 
@@ -739,32 +515,296 @@ export  function SalesDashboard() {
       }
     } catch (error) {
       console.error("Export failed:", error);
-      alert("Failed to export. Please try again.");
+      toast.error("Failed to export. Please try again.", {
+        duration: 3000,
+        position: "top-center",
+      });
     } finally {
       setIsExporting(false);
     }
   };
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
 
-    // Handle file upload logic here
-    console.log("File uploaded:", file.name);
-    alert(`File "${file.name}" uploaded successfully! (Processing not implemented in this demo)`);
+    const newFiles: UploadedFile[] = Array.from(files).map(file => ({
+      name: file.name,
+      size: file.size,
+      type: file.type,
+      uploadedAt: new Date(),
+    }));
+
+    setUploadedFiles(prev => [...prev, ...newFiles]);
+    
+    toast.success(`${files.length} file(s) uploaded successfully!`, {
+      duration: 3000,
+      position: "top-center",
+    });
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
   };
 
+  const removeFile = (index: number) => {
+    setUploadedFiles(prev => prev.filter((_, i) => i !== index));
+    toast.success("File removed", {
+      duration: 2000,
+      position: "top-center",
+    });
+  };
+
+  const formatFileSize = (bytes: number) => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+  };
+
+  const handleNewQuery = () => {
+    console.log('🔄 Starting new query, resetting dashboard');
+    resetDashboard();
+    setUploadedFiles([]);
+  };
+
+  // Show loading state
+  if (loading) {
+    return (
+      <div className="w-full h-screen bg-gray-50 p-6 flex flex-col items-center justify-center">
+        <Toaster />
+        <SequentialLoader />
+      </div>
+    );
+  }
+
+  // Show initial query input (no dashboard yet)
+  if (!hasData) {
+    return (
+      <div className="w-full min-h-screen bg-gray-50 p-6">
+        <Toaster />
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".xlsx,.xls,.csv"
+          onChange={handleFileUpload}
+          className="hidden"
+          multiple
+        />
+
+        {/* Welcome Section */}
+        <div className="max-w-5xl mx-auto mb-10">
+          <div className="text-center mb-8">
+            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-indigo-100 mb-4">
+              <LayoutDashboard className="w-8 h-8 text-indigo-600" />
+            </div>
+            <h1 className="text-3xl font-bold text-slate-800 mb-3">
+              AI-Powered Dashboard Generator
+            </h1>
+            <p className="text-lg text-slate-600 max-w-2xl mx-auto">
+              Describe what kind of dashboard you want, and our AI will generate it for you with interactive charts and insights.
+            </p>
+          </div>
+
+          <QueryInput />
+
+          {/* Quick Start Examples */}
+          <div className="mt-12">
+            <h3 className="text-lg font-semibold text-slate-800 mb-4 text-center">Try these examples:</h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 max-w-4xl mx-auto">
+              <Card className="shadow-sm hover:shadow-md transition-shadow cursor-pointer" onClick={() => fetchDashboardData("Plot a sales Dashboard")}>
+                <CardContent className="p-6">
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="p-2 rounded-lg bg-green-100">
+                      <TrendingUp className="w-5 h-5 text-green-600" />
+                    </div>
+                    <CardTitle className="text-base">Sales Dashboard</CardTitle>
+                  </div>
+                  <p className="text-sm text-slate-600">Generate a complete sales performance dashboard with charts and KPIs.</p>
+                </CardContent>
+              </Card>
+              
+              <Card className="shadow-sm hover:shadow-md transition-shadow cursor-pointer" onClick={() => fetchDashboardData("Show me product performance")}>
+                <CardContent className="p-6">
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="p-2 rounded-lg bg-blue-100">
+                      <BarChart className="w-5 h-5 text-blue-600" />
+                    </div>
+                    <CardTitle className="text-base">Product Analysis</CardTitle>
+                  </div>
+                  <p className="text-sm text-slate-600">Analyze product performance across different categories and metrics.</p>
+                </CardContent>
+              </Card>
+              
+              <Card className="shadow-sm hover:shadow-md transition-shadow cursor-pointer" onClick={() => fetchDashboardData("Analyze branch sales")}>
+                <CardContent className="p-6">
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="p-2 rounded-lg bg-purple-100">
+                      <Globe className="w-5 h-5 text-purple-600" />
+                    </div>
+                    <CardTitle className="text-base">Branch Comparison</CardTitle>
+                  </div>
+                  <p className="text-sm text-slate-600">Compare performance across different branches and locations.</p>
+                </CardContent>
+              </Card>
+            </div>
+          </div>
+
+          {/* Uploaded Files Section */}
+          {uploadedFiles.length > 0 && (
+            <Card className="w-full shadow-lg bg-white mt-8">
+              <CardHeader className="border-b bg-white px-6 py-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-lg bg-green-600 shadow-lg">
+                      <FileSpreadsheet className="w-5 h-5 text-white" />
+                    </div>
+                    <div>
+                      <CardTitle className="text-lg font-bold text-slate-800">
+                        Uploaded Files ({uploadedFiles.length})
+                      </CardTitle>
+                      <p className="text-sm text-slate-600">Your data files are ready for analysis</p>
+                    </div>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="p-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {uploadedFiles.map((file, index) => (
+                    <div
+                      key={index}
+                      className="flex items-center justify-between p-4 bg-slate-50 rounded-lg border border-slate-200"
+                    >
+                      <div className="flex items-center gap-3 flex-1 min-w-0">
+                        <div className="p-2 rounded-lg bg-indigo-100">
+                          <File className="w-5 h-5 text-indigo-600" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-slate-800 truncate" title={file.name}>
+                            {file.name}
+                          </p>
+                          <div className="flex items-center gap-2 mt-1">
+                            <span className="text-xs text-slate-500">{formatFileSize(file.size)}</span>
+                            <span className="text-xs text-slate-400">•</span>
+                            <span className="text-xs text-slate-500">
+                              {file.uploadedAt.toLocaleTimeString()}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => removeFile(index)}
+                        className="ml-2 p-1 hover:bg-red-100 rounded-md transition-colors"
+                        title="Remove file"
+                      >
+                        <X className="w-4 h-4 text-red-600" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // Show dashboard with data
   return (
     <div className="w-full h-full bg-gray-50 p-6">
+      <Toaster />
       <input
         ref={fileInputRef}
         type="file"
         accept=".xlsx,.xls,.csv"
         onChange={handleFileUpload}
         className="hidden"
+        multiple
       />
 
-      <Card className="w-full shadow-2xl bg-white overflow-hidden">
+      {/* New Query Button */}
+      <div className="max-w-7xl mx-auto mb-4">
+        <Button
+          onClick={handleNewQuery}
+          variant="outline"
+          className="border-indigo-300 text-indigo-700 hover:bg-indigo-50"
+        >
+          <ArrowLeft className="w-4 h-4 mr-2" />
+          New Query
+        </Button>
+      </div>
+
+      {/* Query Input (still visible when dashboard is shown) */}
+      <div className="max-w-7xl mx-auto mb-6">
+        <QueryInput />
+      </div>
+
+      {/* Uploaded Files Section */}
+      {uploadedFiles.length > 0 && (
+        <Card className="w-full max-w-7xl mx-auto shadow-lg bg-white mb-6">
+          <CardHeader className="border-b bg-white px-6 py-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-green-600 shadow-lg">
+                  <FileSpreadsheet className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <CardTitle className="text-lg font-bold text-slate-800">
+                    Uploaded Files ({uploadedFiles.length})
+                  </CardTitle>
+                  <p className="text-sm text-slate-600">Manage your uploaded data files</p>
+                </div>
+              </div>
+              <Button
+                onClick={() => setUploadedFiles([])}
+                variant="outline"
+                className="border-red-300 text-red-700 hover:bg-red-50"
+              >
+                Clear All
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent className="p-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {uploadedFiles.map((file, index) => (
+                <div
+                  key={index}
+                  className="flex items-center justify-between p-4 bg-slate-50 rounded-lg border border-slate-200 hover:border-indigo-300 transition-colors"
+                >
+                  <div className="flex items-center gap-3 flex-1 min-w-0">
+                    <div className="p-2 rounded-lg bg-indigo-100">
+                      <File className="w-5 h-5 text-indigo-600" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-slate-800 truncate" title={file.name}>
+                        {file.name}
+                      </p>
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className="text-xs text-slate-500">{formatFileSize(file.size)}</span>
+                        <span className="text-xs text-slate-400">•</span>
+                        <span className="text-xs text-slate-500">
+                          {file.uploadedAt.toLocaleTimeString()}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => removeFile(index)}
+                    className="ml-2 p-1 hover:bg-red-100 rounded-md transition-colors"
+                    title="Remove file"
+                  >
+                    <X className="w-4 h-4 text-red-600" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      <Card ref={cardRef} className="w-full max-w-7xl mx-auto shadow-2xl bg-white overflow-hidden">
         <CardHeader className="border-b bg-white px-6 py-4">
           <div className="flex justify-between items-center">
             <div className="flex items-center gap-3">
@@ -772,17 +812,19 @@ export  function SalesDashboard() {
                 <LayoutDashboard className="w-5 h-5 text-white" />
               </div>
               <div>
+                {/* Dashboard Title - Hardcoded header only */}
                 <CardTitle className="text-xl font-bold text-slate-800">
-                  Supermarket Sales Dashboard
+                  AI-Generated Dashboard
                 </CardTitle>
-                <p className="text-sm text-slate-600">Comprehensive sales analytics and performance insights</p>
+                {/* Dashboard Subtitle - Hardcoded header only */}
+                <p className="text-sm text-slate-600">Interactive analytics dashboard generated from your query</p>
               </div>
             </div>
 
             <div className="flex items-center gap-2">
               <Badge className="bg-indigo-100 text-indigo-800 border-indigo-300">
                 <Calendar className="w-3 h-3 mr-1" />
-                Jan - Mar 2019
+                {new Date().toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
               </Badge>
 
               <Button
@@ -926,160 +968,79 @@ export  function SalesDashboard() {
           </div>
         </CardHeader>
 
-        <CardContent ref={cardRef} className="p-6">
+        <CardContent className="p-6">
           {loading ? (
             <div className="min-h-[600px] flex items-center justify-center">
               <SequentialLoader />
             </div>
           ) : (
-            <div className="space-y-6">
-              {/* KPI Cards */}
-              <div>
-                <h3 className="text-lg font-semibold text-slate-800 mb-4 flex items-center gap-2">
-                  <TrendingUp className="w-5 h-5 text-green-600" />
-                  Key Performance Indicators
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                  <Card className="shadow-sm">
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                      <CardTitle className="text-sm font-medium text-slate-600">Total Sales</CardTitle>
-                      <Badge variant="secondary">₹</Badge>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="text-2xl font-bold text-black">₹{kpis.totalSales.toLocaleString()}</div>
-                      <p className="text-xs text-muted-foreground">Revenue in Indian Rupees</p>
-                    </CardContent>
-                  </Card>
-
-                  <Card className="shadow-sm">
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                      <CardTitle className="text-sm font-medium text-slate-600">Total Transactions</CardTitle>
-                      <Badge variant="secondary">#</Badge>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="text-2xl font-bold text-black">
-                        {kpis.totalTransactions.toLocaleString()}
-                      </div>
-                      <p className="text-xs text-muted-foreground">Number of sales transactions</p>
-                    </CardContent>
-                  </Card>
-
-                  <Card className="shadow-sm">
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                      <CardTitle className="text-sm font-medium text-slate-600">Avg Transaction</CardTitle>
-                      <Badge variant="secondary">₹</Badge>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="text-2xl font-bold text-black">
-                        ₹{kpis.averageTransactionValue.toFixed(0)}
-                      </div>
-                      <p className="text-xs text-muted-foreground">Average transaction value</p>
-                    </CardContent>
-                  </Card>
-
-                  <Card className="shadow-sm">
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                      <CardTitle className="text-sm font-medium text-slate-600">Avg Rating</CardTitle>
-                      <Badge variant="secondary">⭐</Badge>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="text-2xl font-bold text-black">{kpis.avgRating.toFixed(1)}/10</div>
-                      <p className="text-xs text-muted-foreground">Customer satisfaction</p>
-                    </CardContent>
-                  </Card>
+            <div className="space-y-8">
+              {/* SECTION 1: KPI Cards - Header Hardcoded, Content Dynamic */}
+              {dashboardData.kpis && dashboardData.kpis.length > 0 && (
+                <div>
+                  {/* HARDCODED SECTION HEADER */}
+                  <h3 className="text-lg font-semibold text-slate-800 mb-4 flex items-center gap-2">
+                    <TrendingUp className="w-5 h-5 text-green-600" />
+                    Key Performance Indicators
+                  </h3>
+                  
+                  {/* DYNAMIC CONTENT FROM BACKEND */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    {dashboardData.kpis.map((kpi, index) => renderKPICard(kpi, index))}
+                  </div>
                 </div>
-              </div>
+              )}
 
-              {/* Charts Section */}
-              <div>
-                <h3 className="text-lg font-semibold text-slate-800 mb-4 flex items-center gap-2">
-                  <BarChart className="w-5 h-5 text-indigo-600" />
-                  Visualizations
-                </h3>
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  <Card className="shadow-sm chart-container">
-                    <CardHeader>
-                      <CardTitle>Product Line Performance</CardTitle>
-                      <CardDescription>Sales distribution across product categories</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <ReactECharts option={productLineChartOption} style={{ height: "400px" }} />
-                    </CardContent>
-                  </Card>
-
-                  <Card className="shadow-sm chart-container">
-                    <CardHeader>
-                      <CardTitle>Monthly Sales Trend</CardTitle>
-                      <CardDescription>Sales and transaction trends over time</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <ReactECharts option={monthlyTrendOption} style={{ height: "400px" }} />
-                    </CardContent>
-                  </Card>
+              {/* SECTION 2: Charts - Header Hardcoded, Content Dynamic */}
+              {dashboardData.charts && dashboardData.charts.length > 0 && (
+                <div>
+                  {/* HARDCODED SECTION HEADER */}
+                  <h3 className="text-lg font-semibold text-slate-800 mb-4 flex items-center gap-2">
+                    <BarChart className="w-5 h-5 text-indigo-600" />
+                    Visualizations
+                  </h3>
+                  
+                  {/* DYNAMIC CONTENT FROM BACKEND */}
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    {dashboardData.charts.map((chart, index) => renderChart(chart, index))}
+                  </div>
                 </div>
-              </div>
+              )}
 
-              {/* Middle Row Charts */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <Card className="shadow-sm chart-container">
-                  <CardHeader>
-                    <CardTitle>Branch Comparison</CardTitle>
-                    <CardDescription>Performance comparison across different branches</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <ReactECharts option={branchComparisonOption} style={{ height: "400px" }} />
-                  </CardContent>
-                </Card>
-
-                <Card className="shadow-sm chart-container">
-                  <CardHeader>
-                    <CardTitle>Customer Segments</CardTitle>
-                    <CardDescription>Sales analysis by customer type and gender</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <ReactECharts option={customerSegmentOption} style={{ height: "400px" }} />
-                  </CardContent>
-                </Card>
-              </div>
-
-              {/* Bottom Row */}
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <Card className="shadow-sm chart-container">
-                  <CardHeader>
-                    <CardTitle>Payment Methods</CardTitle>
-                    <CardDescription>Distribution of payment preferences</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <ReactECharts option={paymentMethodOption} style={{ height: "300px" }} />
-                  </CardContent>
-                </Card>
-
-                <Card className="lg:col-span-2 shadow-sm">
-                  <CardHeader>
-                    <CardTitle>Key Insights</CardTitle>
-                    <CardDescription>Summary of important findings</CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="flex items-center space-x-3">
-                      <Badge>Top Performer</Badge>
-                      <span className="text-sm">Food & Beverages leads in total sales (₹56,145)</span>
-                    </div>
-                    <div className="flex items-center space-x-3">
-                      <Badge variant="outline">Best Branch</Badge>
-                      <span className="text-sm">
-                        Naypyitaw branch has highest sales (₹1,10,569) and rating (7.1/10)
-                      </span>
-                    </div>
-                    <div className="flex items-center space-x-3">
-                      <Badge variant="secondary">Growth</Badge>
-                      <span className="text-sm">March showed strong recovery with ₹1,09,456 in sales</span>
-                    </div>
-                    <div className="flex items-center space-x-3">
-                      <Badge variant="destructive">Payment</Badge>
-                      <span className="text-sm">
-                        Cash remains the preferred payment method (34.7% of total sales)
-                      </span>
-                    </div>
+              {/* SECTION 3: Key Insights - Header Hardcoded, Content Dynamic */}
+              <div>
+                {/* HARDCODED SECTION HEADER */}
+                <h3 className="text-lg font-semibold text-slate-800 mb-4 flex items-center gap-2">
+                  <FileText className="w-5 h-5 text-orange-600" />
+                  Key Insights
+                </h3>
+                
+                {/* DYNAMIC CONTENT FROM BACKEND */}
+                <Card className="shadow-sm">
+                  <CardContent className="p-6 space-y-4">
+                    {dashboardData.kpis && dashboardData.kpis.length > 0 ? (
+                      dashboardData.kpis.slice(0, 3).map((kpi, index) => (
+                        <div key={index} className="flex items-center space-x-3">
+                          <Badge variant={index === 0 ? "default" : index === 1 ? "outline" : "secondary"}>
+                            {index === 0 ? "Top" : index === 1 ? "Important" : "Notable"}
+                          </Badge>
+                          <span className="text-sm">
+                            <strong>{kpi.title}:</strong> {kpi.value} - {kpi.description}
+                          </span>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="text-sm text-slate-500">No insights available</p>
+                    )}
+                    
+                    {dashboardData.charts && dashboardData.charts.length > 0 && (
+                      <div className="flex items-center space-x-3 pt-2 border-t">
+                        <Badge variant="destructive">Charts</Badge>
+                        <span className="text-sm">
+                          Dashboard contains {dashboardData.charts.length} interactive charts with detailed analytics
+                        </span>
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               </div>
