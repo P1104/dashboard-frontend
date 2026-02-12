@@ -11,6 +11,8 @@ interface LoginResponse {
   access_token: string;
   message: string;
   email: string;
+  name: string;
+
 }
 
 interface LoginState {
@@ -18,6 +20,7 @@ interface LoginState {
   error: string | null;
   token: string | null;
   email: string | null;
+  name: string | null;
 
   login: (payload: LoginPayload) => Promise<LoginResponse>;
   logout: () => void;
@@ -30,6 +33,7 @@ export const useLoginStore = create<LoginState>((set, get) => ({
   error: null,
   token: null,
   email: null,
+  name: null,
 
   hydrate: () => {
     if (typeof window === "undefined") return;
@@ -37,47 +41,55 @@ export const useLoginStore = create<LoginState>((set, get) => ({
     set({
       token: localStorage.getItem("auth_token"),
       email: localStorage.getItem("user_email"),
+      name: localStorage.getItem("user_name"),
     });
   },
 
   login: async (payload) => {
-    try {
-      set({ loading: true, error: null });
+  try {
+    set({ loading: true, error: null });
 
-      const response = await fetch(`${url.backendUrl}/api/login`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
+    const response = await fetch(`${url.backendUrl}/api/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
 
-      const responseText = await response.text();
+    const data = await response.json().catch(() => null);
 
-      if (!response.ok) {
-        // Check if it's the specific "sign up" message
-        if (responseText.includes("Please sign up to create an account")) {
-          throw new Error("Please sign up to create an account.");
-        }
-        throw new Error(responseText || "Login failed");
+    if (!response.ok) {
+      const message =
+        data?.detail ||
+        data?.message ||
+        "Login failed";
+
+      if (message.includes("Please sign up to create an account")) {
+        throw new Error("Please sign up to create an account.");
       }
 
-      const data: LoginResponse = await JSON.parse(responseText);
-
-      // ✅ safe: this runs only after user action (client)
-      localStorage.setItem("auth_token", data.access_token);
-      localStorage.setItem("user_email", data.email || payload.username);
-
-      set({
-        loading: false,
-        token: data.access_token,
-        email: data.email || payload.username,
-      });
-
-      return data;
-    } catch (err: any) {
-      set({ loading: false, error: err.message });
-      throw err;
+      throw new Error(message);
     }
-  },
+
+    // ✅ Success case
+    localStorage.setItem("auth_token", data.access_token);
+    localStorage.setItem("user_email", data.email || payload.username);
+    localStorage.setItem("user_name", data.name);
+
+    set({
+      loading: false,
+      token: data.access_token,
+      email: data.email || payload.username,
+      name: data.name,
+    });
+
+    return data;
+
+  } catch (err: any) {
+    set({ loading: false, error: err.message });
+    throw err;
+  }
+},
+
 
   logout: () => {
     if (typeof window !== "undefined") {
