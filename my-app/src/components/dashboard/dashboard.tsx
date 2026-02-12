@@ -1,15 +1,15 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable react/no-unescaped-entities */
-/* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable react-hooks/exhaustive-deps */
 
 "use client";
+
 import React, { useRef, useState, useEffect } from "react";
 import ReactECharts from "echarts-for-react";
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from "../ui/card";
@@ -19,7 +19,6 @@ import { Toaster } from "../ui/sonner";
 import { toast } from "sonner";
 import {
   LayoutDashboard,
-  Calendar,
   TrendingUp,
   BarChart,
   FileText,
@@ -30,26 +29,33 @@ import {
   Globe,
   X,
   File,
-  ArrowLeft,
   User,
   Settings,
   LogOut,
   Trash2,
-  RefreshCw,
   Plus,
-  MoreVertical,
-  Send,
   Check,
   Database,
   ChevronDown,
+  Copy,
+  ArrowUp,
+  RotateCcw,
+  Clock,
+  Brain,
+  Calendar,
+  DownloadCloud,
+  Image,
+  FileJson,
+  Mic,
+  CircleStop,
 } from "lucide-react";
 
 import * as htmlToImage from "html-to-image";
 import jsPDF from "jspdf";
 import * as XLSX from "xlsx";
-// CHANGED THIS IMPORT ONLY:
+import { motion, AnimatePresence } from "framer-motion";
+
 import {
-  dashboardAPI,
   useDashboardStore,
 } from "@/src/services/api/dashboard/dashboard-api-store";
 
@@ -59,19 +65,31 @@ import { useRouter } from "next/navigation";
 
 import { fetchDataSources } from "@/src/services/api/dashboard/data-source";
 
+import {
+  Table,
+  TableBody,
+  TableHead,
+  TableHeader,
+  TableRow,
+  TableCell,
+} from "../ui/table";
+import { ScrollArea } from "../ui/scroll-area";
+
+// ==================== SEQUENTIAL LOADER ====================
+
 const SequentialLoader = () => {
   const messages = [
-    "Preparing dashboard...",
-    "Loading data...",
-    "Almost there...",
-    "Please wait ⏳",
+    'Preparing dashboard...',
+    'Loading data...',
+    'Almost there...',
+    'Please wait ⏳',
   ];
-  const [step, setStep] = useState(0);
+  const [step, setStep] = React.useState(0);
 
   React.useEffect(() => {
     const interval = setInterval(() => {
       setStep((prev) => (prev + 1) % messages.length);
-    }, 20000);
+    }, 5000);
     return () => clearInterval(interval);
   }, []);
 
@@ -83,177 +101,202 @@ const SequentialLoader = () => {
   );
 };
 
-interface UploadedFile {
-  name: string;
-  size: number;
-  type: string;
-  uploadedAt: Date;
-  isExisting?: boolean;
-}
+// ==================== ROTATING TEXT LOADER ====================
 
-export function SalesDashboard() {
-  const cardRef = useRef<HTMLDivElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [isExporting, setIsExporting] = useState(false);
-  const [showDownloadMenu, setShowDownloadMenu] = useState(false);
-  const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
-  const [userEmail, setUserEmail] = useState<string>("");
-  const [loadingFiles, setLoadingFiles] = useState(false);
-  const router = useRouter();
-  const [query, setQuery] = useState("");
-  const [showFileDialog, setShowFileDialog] = useState(false);
-  const [selectedFiles, setSelectedFiles] = useState<string[]>([]);
-  const [showFileUploadModal, setShowFileUploadModal] = useState(false);
-  const [recentlyUploadedFile, setRecentlyUploadedFile] = useState<
-    string | null
-  >(null);
-  const [uploadSuccess, setUploadSuccess] = useState(false);
-  const [showUserMenu, setShowUserMenu] = useState(false);
-  const [showChatHistory, setShowChatHistory] = useState(false);
-
-  const {
-    loading,
-    hasData,
-    dashboardData,
-    fetchDashboardData,
-    resetDashboard,
-    polling,
-    currentTaskId,
-    stopPolling,
-    // ADD THESE LINES:
-    currentChatId,
-    currentMessageId,
-    chatHistory,
-    startNewChat,
-    loadChat,
-  } = useDashboardStore();
-  const { uploading, uploadAndGenerate } = useUploadStore();
-  const { deleteFile, loading: deleteLoading } = useDeleteFileStore();
+const RotatingTextLoader = () => {
+  const texts = [
+    "Thinking...",
+    "Generating response...",
+    "Analyzing data...",
+    "Please Wait...",
+  ];
+  const [step, setStep] = useState(0);
 
   useEffect(() => {
-    // Get user email from localStorage
-    const email = localStorage.getItem("user_email") || "";
-    setUserEmail(email);
-
-    // Load existing files from backend
-    loadExistingFiles();
+    const interval = setInterval(() => {
+      setStep((prev) => (prev + 1) % texts.length);
+    }, 2000);
+    return () => clearInterval(interval);
   }, []);
 
-  const loadExistingFiles = async () => {
-    setLoadingFiles(true);
-    try {
-      // Use the fetchDataSources utility function
-      const existingFiles = await fetchDataSources();
-      console.log("Raw existing files from API:", existingFiles);
+  return (
+    <motion.div
+      key={step}
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -10 }}
+      transition={{ duration: 0.5, ease: "easeInOut" }}
+      className="text-md italic text-gray-600"
+    >
+      {texts[step]}
+    </motion.div>
+  );
+};
 
-      if (!Array.isArray(existingFiles)) {
-        console.warn("Existing files is not an array:", existingFiles);
-        setUploadedFiles([]);
-        return;
+// ==================== QUICK QUERIES COMPONENT ====================
+
+const QuickQueries = ({ onSelectQuery }: { onSelectQuery: (query: string) => void }) => {
+  const quickQueries = [
+    {
+      icon: <TrendingUp className="w-4 h-4" />,
+      text: "Plot a sales Dashboard",
+      description: "Visualize sales trends and performance"
+    },
+    {
+      icon: <BarChart className="w-4 h-4" />,
+      text: "Show me product performance",
+      description: "Analyze top products and categories"
+    },
+    {
+      icon: <FileText className="w-4 h-4" />,
+      text: "Analyze branch sales",
+      description: "Compare sales across different branches"
+    },
+    {
+      icon: <Calendar className="w-4 h-4" />,
+      text: "Monthly revenue analysis",
+      description: "View revenue trends by month"
+    },
+  ];
+
+  return (
+    <div className="grid grid-cols-2 gap-3 mt-6 max-w-3xl mx-auto">
+      {quickQueries.map((query, index) => (
+        <motion.button
+          key={index}
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: index * 0.1 }}
+          onClick={() => onSelectQuery(query.text)}
+          className="flex items-start gap-3 p-4 bg-white/70 border border-white/20 rounded-xl hover:bg-white/90 hover:border-indigo-200 transition-all text-left group shadow-sm hover:shadow-md"
+        >
+          <div className="p-2 bg-indigo-50 rounded-lg text-indigo-600 group-hover:bg-indigo-100 transition-colors">
+            {query.icon}
+          </div>
+          <div className="flex-1">
+            <p className="text-sm font-medium text-slate-800">{query.text}</p>
+            <p className="text-xs text-slate-500 mt-0.5">{query.description}</p>
+          </div>
+        </motion.button>
+      ))}
+    </div>
+  );
+};
+
+// ==================== CHART DOWNLOAD BUTTON ====================
+
+const ChartDownloadButton = ({ chartOption, chartTitle }: { chartOption: any; chartTitle: string }) => {
+  const [showMenu, setShowMenu] = useState(false);
+  const chartRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setShowMenu(false);
       }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
-      // Convert backend response to UploadedFile format
-      const formattedFiles: UploadedFile[] = existingFiles.map((file: any) => {
-        // Handle string filenames (e.g., "DistrictswiseCR_AEdataf_24-25.csv")
-        if (typeof file === "string") {
-          return {
-            name: file,
-            size: 0, // Default size since we don't have this info
-            type: getFileTypeFromName(file), // Helper function to guess file type
-            uploadedAt: new Date(), // Default date
-            isExisting: true,
-          };
-        }
+  const downloadChart = async (format: string) => {
+    if (!chartRef.current) return;
 
-        // Handle file objects (if backend returns objects in the future)
-        return {
-          name:
-            file.name || file.filename || file.originalname || "Unknown file",
-          size: file.size || file.fileSize || 0,
-          type:
-            file.type ||
-            file.mimetype ||
-            getFileTypeFromName(file.name || file.filename || ""),
-          uploadedAt:
-            file.uploadedAt || file.createdAt || file.uploadDate
-              ? new Date(file.uploadedAt || file.createdAt || file.uploadDate)
-              : new Date(),
-          isExisting: true,
-        };
+    try {
+      const canvas = await htmlToImage.toCanvas(chartRef.current, {
+        scale: 2,
+        backgroundColor: '#ffffff'
       });
 
-      setUploadedFiles(formattedFiles);
-      console.log(
-        "Loaded existing files:",
-        formattedFiles.length,
-        formattedFiles,
-      );
-    } catch (error: any) {
-      console.error("Failed to load existing files:", error);
-      toast.error(error.message || "Failed to load existing files", {
-        duration: 3000,
-        position: "top-center",
-      });
-    } finally {
-      setLoadingFiles(false);
+      if (format === 'png') {
+        const link = document.createElement('a');
+        link.download = `${chartTitle || 'chart'}.png`;
+        link.href = canvas.toDataURL('image/png');
+        link.click();
+        toast.success('Chart downloaded as PNG');
+      } else if (format === 'jpg') {
+        const link = document.createElement('a');
+        link.download = `${chartTitle || 'chart'}.jpg`;
+        link.href = canvas.toDataURL('image/jpeg', 0.9);
+        link.click();
+        toast.success('Chart downloaded as JPG');
+      }
+    } catch (error) {
+      console.error('Failed to download chart:', error);
+      toast.error('Failed to download chart');
     }
+
+    setShowMenu(false);
   };
 
-  // Helper function to guess file type from filename
-  const getFileTypeFromName = (filename: string): string => {
-    if (!filename) return "application/octet-stream";
+  return (
+    <div className="relative" ref={menuRef}>
+      <Button
+        variant="ghost"
+        size="icon"
+        className="h-8 w-8 hover:bg-slate-100"
+        onClick={() => setShowMenu(!showMenu)}
+        title="Download options"
+      >
+        <DownloadCloud className="w-4 h-4" />
+      </Button>
+      
+      {showMenu && (
+        <>
+          <div 
+            className="fixed inset-0 z-40" 
+            onClick={() => setShowMenu(false)}
+          />
+          <div className="absolute right-0 top-full mt-1 w-48 bg-white rounded-lg shadow-lg border z-50 overflow-hidden">
+            <div className="py-1">
+              <button
+                onClick={() => downloadChart('png')}
+                className="flex items-center gap-2 w-full px-3 py-2 text-sm text-slate-700 hover:bg-slate-100 transition-colors"
+              >
+                <Image className="w-4 h-4" />
+                Download as PNG
+              </button>
+              <button
+                onClick={() => downloadChart('jpg')}
+                className="flex items-center gap-2 w-full px-3 py-2 text-sm text-slate-700 hover:bg-slate-100 transition-colors"
+              >
+                <Image className="w-4 h-4" />
+                Download as JPG
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+      
+      <div ref={chartRef} className="absolute -left-[9999px] top-0 w-[800px] h-[400px] bg-white p-4">
+        <ReactECharts
+          option={chartOption}
+          style={{ height: "100%", width: "100%" }}
+          opts={{ renderer: "canvas" }}
+        />
+      </div>
+    </div>
+  );
+};
 
-    const ext = filename.split(".").pop()?.toLowerCase();
+// ==================== DASHBOARD CARD WITH EXPORT ====================
 
-    switch (ext) {
-      case "csv":
-        return "text/csv";
-      case "xlsx":
-        return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
-      case "xls":
-        return "application/vnd.ms-excel";
-      case "json":
-        return "application/json";
-      case "txt":
-        return "text/plain";
-      case "pdf":
-        return "application/pdf";
-      default:
-        return "application/octet-stream";
-    }
-  };
+interface DashboardCardProps {
+  dashboardData: any;
+  timestamp: Date;
+  cardRef?: React.RefObject<HTMLDivElement>;
+  showLoader?: boolean;
+}
 
-  const handleLogout = () => {
-    localStorage.removeItem("user_email");
-    localStorage.removeItem("auth_token");
-    localStorage.removeItem("token_type");
-    router.push("/");
-  };
+const DashboardCard = ({ dashboardData, timestamp, cardRef, showLoader }: DashboardCardProps) => {
+  const [isExporting, setIsExporting] = useState(false);
+  const [showDownloadMenu, setShowDownloadMenu] = useState(false);
+  const dashboardCardRef = useRef<HTMLDivElement>(null);
 
-  const handleSettings = () => {
-    router.push("/settings");
-  };
-
-  console.log("📊 Dashboard State:", {
-    loading,
-    hasData,
-    polling,
-    currentTaskId,
-    kpisCount: dashboardData.kpis?.length || 0,
-    chartsCount: dashboardData.charts?.length || 0,
-    dashboardData: dashboardData,
-  });
-
-  // Dynamic chart rendering function - ALL CONTENT FROM BACKEND
   const renderChart = (chartOption: any, index: number) => {
-    console.log(`📈 Rendering chart ${index}:`, {
-      title: chartOption.title?.text,
-      seriesType: chartOption.series?.[0]?.type,
-      dataLength: chartOption.series?.[0]?.data?.length,
-    });
-
-    // Fix chart option if it has doughnut type (ECharts uses pie with radius)
     const fixedChartOption = { ...chartOption };
+    const chartTitle = fixedChartOption.title?.text || `Chart ${index + 1}`;
 
     if (fixedChartOption.series) {
       fixedChartOption.series = fixedChartOption.series.map((series: any) => {
@@ -261,7 +304,7 @@ export function SalesDashboard() {
           return {
             ...series,
             type: "pie",
-            radius: ["40%", "70%"], // This creates a doughnut effect
+            radius: ["40%", "70%"],
           };
         }
         return series;
@@ -269,56 +312,38 @@ export function SalesDashboard() {
     }
 
     return (
-      <Card key={index} className="shadow-sm chart-container">
-        <CardHeader>
-          {/* Chart Title from backend */}
-          <CardTitle>
-            {fixedChartOption.title?.text || `Chart ${index + 1}`}
-          </CardTitle>
-          {/* Chart Description can be derived from tooltip or other properties */}
-          <CardDescription>
-            {fixedChartOption.tooltip?.formatter
-              ? `Interactive chart showing ${fixedChartOption.title?.text?.toLowerCase() || "data"}`
-              : "Data visualization"}
-          </CardDescription>
+      <Card key={index} className="shadow-sm chart-container relative group">
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle className="text-base">{chartTitle}</CardTitle>
+          <ChartDownloadButton chartOption={fixedChartOption} chartTitle={chartTitle} />
         </CardHeader>
         <CardContent>
-          <ReactECharts
-            option={fixedChartOption}
-            style={{ height: "400px" }}
-            opts={{ renderer: "canvas" }}
-          />
+          <div className="h-[300px]">
+            <ReactECharts
+              option={fixedChartOption}
+              style={{ height: "100%", width: "100%" }}
+              opts={{ renderer: "canvas" }}
+            />
+          </div>
         </CardContent>
       </Card>
     );
   };
 
-  // Dynamic KPI card rendering - ALL CONTENT FROM BACKEND
   const renderKPICard = (kpi: any, index: number) => {
-    console.log(`📊 Rendering KPI ${index}:`, kpi);
-
-    // Determine badge based on KPI title from backend
-    let badgeVariant: "secondary" | "outline" | "default" | "destructive" =
-      "secondary";
+    let badgeVariant: "secondary" | "outline" | "default" | "destructive" = "secondary";
     let badgeIcon = "📊";
 
     if (kpi.title.includes("Sales") || kpi.title.includes("Revenue")) {
       badgeVariant = "secondary";
       badgeIcon = "₹";
-    } else if (
-      kpi.title.includes("Transaction") ||
-      kpi.title.includes("Count")
-    ) {
+    } else if (kpi.title.includes("Transaction") || kpi.title.includes("Count")) {
       badgeVariant = "outline";
       badgeIcon = "#";
     } else if (kpi.title.includes("Rating") || kpi.title.includes("Score")) {
       badgeVariant = "default";
       badgeIcon = "⭐";
-    } else if (
-      kpi.title.includes("Profit") ||
-      kpi.title.includes("Income") ||
-      kpi.title.includes("Margin")
-    ) {
+    } else if (kpi.title.includes("Profit") || kpi.title.includes("Income") || kpi.title.includes("Margin")) {
       badgeVariant = "destructive";
       badgeIcon = "💰";
     }
@@ -326,16 +351,13 @@ export function SalesDashboard() {
     return (
       <Card key={index} className="shadow-sm">
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          {/* KPI Title from backend */}
           <CardTitle className="text-sm font-medium text-slate-600">
             {kpi.title}
           </CardTitle>
           <Badge variant={badgeVariant}>{badgeIcon}</Badge>
         </CardHeader>
         <CardContent>
-          {/* KPI Value from backend */}
           <div className="text-2xl font-bold text-black">{kpi.value}</div>
-          {/* KPI Description from backend */}
           <p className="text-xs text-muted-foreground">{kpi.description}</p>
         </CardContent>
       </Card>
@@ -354,505 +376,645 @@ export function SalesDashboard() {
     URL.revokeObjectURL(url);
   };
 
-  const showSuccessMessage = (format: string) => {
-    toast.success(`${format} downloaded successfully!`, {
-      duration: 3000,
-      position: "top-center",
-    });
-  };
-
-  const handleHTMLExport = () => {
-    try {
-      const { kpis, charts } = dashboardData;
-
-      const htmlContent = `
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Supermarket Sales Dashboard</title>
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
-      background: #f8fafc;
-      padding: 20px;
-      color: #1e293b;
-    }
-    .container { max-width: 1400px; margin: 0 auto; }
-    h1 { font-size: 2.5rem; text-align: center; margin-bottom: 10px; color: #1e293b; }
-    .subtitle { text-align: center; color: #64748b; margin-bottom: 30px; }
-    .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; margin-bottom: 30px; }
-    .kpi-card {
-      background: white;
-      padding: 20px;
-      border-radius: 12px;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-    }
-    .kpi-title { font-size: 0.875rem; color: #64748b; margin-bottom: 8px; }
-    .kpi-value { font-size: 1.875rem; font-weight: bold; color: #1e293b; }
-    .section { background: white; padding: 25px; border-radius: 12px; margin-bottom: 25px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
-    .section-title { font-size: 1.25rem; font-weight: 600; margin-bottom: 15px; color: #1e293b; }
-    .chart-container { 
-      margin: 20px 0; 
-      padding: 20px; 
-      background: white; 
-      border-radius: 12px; 
-      box-shadow: 0 1px 3px rgba(0,0,0,0.1); 
-    }
-    .chart-title { font-size: 1.125rem; font-weight: 600; margin-bottom: 10px; color: #1e293b; }
-    .footer { text-align: center; color: #94a3b8; margin-top: 30px; padding-top: 20px; border-top: 1px solid #e2e8f0; }
-  </style>
-</head>
-<body>
-  <div class="container">
-    <h1>Supermarket Sales Dashboard</h1>
-    <p class="subtitle">Comprehensive sales analytics and performance insights</p>
+  const handleDownload = async (format: string) => {
+    if (!dashboardCardRef.current) return;
     
-    <div class="kpi-grid">
-      ${kpis
-        .map(
-          (kpi) => `
-        <div class="kpi-card">
-          <div class="kpi-title">${kpi.title}</div>
-          <div class="kpi-value">${kpi.value}</div>
-          <p class="kpi-description">${kpi.description}</p>
-        </div>
-      `,
-        )
-        .join("")}
-    </div>
-
-    ${charts
-      .map(
-        (chart, index) => `
-      <div class="section">
-        <h2 class="section-title">${chart.title?.text || `Chart ${index + 1}`}</h2>
-        <div class="chart-container">
-          <!-- Chart ${index + 1}: ${chart.title?.text} -->
-          <p><em>Note: Charts are rendered dynamically in the application. This HTML export contains data summaries only.</em></p>
-          ${
-            chart.series && chart.series[0] && chart.series[0].data
-              ? `
-            <p>Data Points: ${JSON.stringify(chart.series[0].data)}</p>
-          `
-              : ""
-          }
-        </div>
-      </div>
-    `,
-      )
-      .join("")}
-
-    <div class="footer">
-      Generated on ${new Date().toLocaleDateString()} at ${new Date().toLocaleTimeString()}
-    </div>
-  </div>
-</body>
-</html>
-      `;
-
-      const blob = new Blob([htmlContent], { type: "text/html" });
-      downloadFile(blob, `Supermarket-Sales-Dashboard-${Date.now()}.html`);
-      showSuccessMessage("HTML");
-    } catch (error) {
-      console.error("HTML export failed:", error);
-      toast.error("Failed to export HTML. Please try again.", {
-        duration: 3000,
-        position: "top-center",
-      });
-    }
-  };
-
-  const handleExcelExport = async () => {
-    try {
-      setIsExporting(true);
-
-      const { kpis, charts } = dashboardData;
-
-      const wb = XLSX.utils.book_new();
-
-      // Dashboard Summary Sheet
-      const summaryData = [
-        ["SUPERMARKET SALES DASHBOARD"],
-        [],
-        ["KEY PERFORMANCE INDICATORS"],
-        ...kpis.map((kpi) => [kpi.title, kpi.value, kpi.description]),
-        [],
-        ["CHART SUMMARIES"],
-      ];
-
-      charts.forEach((chart, index) => {
-        summaryData.push([]);
-        summaryData.push([chart.title?.text || `Chart ${index + 1}`]);
-
-        if (chart.series && chart.series[0] && chart.series[0].data) {
-          summaryData.push(["Data Points:"]);
-          chart.series[0].data.forEach((item: any) => {
-            if (typeof item === "object") {
-              summaryData.push([item.name || "Item", item.value || "Value"]);
-            } else {
-              summaryData.push([`Data Point`, item]);
-            }
-          });
-        }
-      });
-
-      const summarySheet = XLSX.utils.aoa_to_sheet(summaryData);
-
-      // Style the summary sheet
-      summarySheet["!cols"] = [{ wch: 30 }, { wch: 20 }, { wch: 40 }];
-
-      XLSX.utils.book_append_sheet(wb, summarySheet, "Dashboard Summary");
-
-      XLSX.writeFile(wb, `Supermarket-Sales-Dashboard-${Date.now()}.xlsx`);
-      showSuccessMessage("Excel");
-    } catch (error) {
-      console.error("Excel export failed:", error);
-      toast.error("Failed to export Excel. Please try again.", {
-        duration: 3000,
-        position: "top-center",
-      });
-    } finally {
-      setIsExporting(false);
-    }
-  };
-
-  const handleDownload = async (
-    format: "jpeg" | "png" | "pdf" | "print" | "excel" | "html",
-  ) => {
-    if (!cardRef.current) return;
-
-    if (format === "excel") {
-      handleExcelExport();
-      setShowDownloadMenu(false);
-      return;
-    }
-
-    if (format === "html") {
-      handleHTMLExport();
-      setShowDownloadMenu(false);
-      return;
-    }
-
     setIsExporting(true);
     setShowDownloadMenu(false);
-
+    
     try {
-      switch (format) {
-        case "jpeg":
-        case "png": {
-          const dataUrl =
-            format === "png"
-              ? await htmlToImage.toPng(cardRef.current, {
-                  quality: 0.95,
-                  backgroundColor: "#ffffff",
-                  pixelRatio: 2,
-                })
-              : await htmlToImage.toJpeg(cardRef.current, {
-                  quality: 0.95,
-                  backgroundColor: "#ffffff",
-                  pixelRatio: 2,
-                });
-
-          const blob = await (await fetch(dataUrl)).blob();
-          const filename = `Supermarket-Dashboard-${Date.now()}.${format === "png" ? "png" : "jpg"}`;
-
-          downloadFile(blob, filename);
-          showSuccessMessage(format.toUpperCase());
-          break;
-        }
-
-        case "pdf": {
-          const pdf = new jsPDF({
-            orientation: "landscape",
-            unit: "mm",
-            format: "a4",
-          });
-
-          const dataUrl = await htmlToImage.toJpeg(cardRef.current, {
-            quality: 0.9,
-            backgroundColor: "#ffffff",
-            pixelRatio: 1.5,
-          });
-
-          const pdfWidth = pdf.internal.pageSize.getWidth();
-          const pdfHeight = pdf.internal.pageSize.getHeight();
-
-          pdf.addImage(dataUrl, "JPEG", 0, 0, pdfWidth, pdfHeight);
-          pdf.save(`Supermarket-Dashboard-${Date.now()}.pdf`);
-          showSuccessMessage("PDF");
-          break;
-        }
-
-        case "print": {
-          const dataUrl = await htmlToImage.toJpeg(cardRef.current, {
-            quality: 0.95,
-            backgroundColor: "#ffffff",
-            pixelRatio: 2,
-          });
-
-          const printWindow = window.open("", "_blank");
-          if (!printWindow) {
-            toast.error("Please allow popups to print", {
-              duration: 3000,
-              position: "top-center",
-            });
-            break;
-          }
-
+      if (format === 'png') {
+        const canvas = await htmlToImage.toCanvas(dashboardCardRef.current, {
+          scale: 2,
+          backgroundColor: '#ffffff',
+          pixelRatio: 2,
+        });
+        const image = canvas.toDataURL('image/png');
+        const blob = await (await fetch(image)).blob();
+        downloadFile(blob, `dashboard-${Date.now()}.png`);
+        toast.success('PNG downloaded successfully!');
+      } else if (format === 'pdf') {
+        const canvas = await htmlToImage.toCanvas(dashboardCardRef.current, {
+          scale: 2,
+          backgroundColor: '#ffffff',
+          pixelRatio: 2,
+        });
+        const image = canvas.toDataURL('image/png');
+        const pdf = new jsPDF({
+          orientation: 'landscape',
+          unit: 'px',
+          format: [canvas.width, canvas.height]
+        });
+        pdf.addImage(image, 'PNG', 0, 0, canvas.width, canvas.height);
+        pdf.save(`dashboard-${Date.now()}.pdf`);
+        toast.success('PDF downloaded successfully!');
+      } else if (format === 'print') {
+        const canvas = await htmlToImage.toCanvas(dashboardCardRef.current, {
+          scale: 2,
+          backgroundColor: '#ffffff',
+          pixelRatio: 2,
+        });
+        const image = canvas.toDataURL('image/png');
+        const printWindow = window.open('', '_blank');
+        if (printWindow) {
           printWindow.document.write(`
             <!DOCTYPE html>
             <html>
             <head>
-              <title>Supermarket Sales Dashboard</title>
+              <title>Dashboard Report</title>
               <style>
-                * { margin: 0; padding: 0; box-sizing: border-box; }
-                body { 
-                  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
-                  margin: 0;
-                  padding: 20px;
-                  background: white;
-                }
-                .print-header { 
-                  text-align: center; 
-                  margin-bottom: 20px;
-                  padding-bottom: 15px;
-                  border-bottom: 2px solid #e5e7eb;
-                }
-                .print-title { 
-                  font-size: 24px; 
-                  font-weight: bold; 
-                  margin-bottom: 10px;
-                  color: #1e293b;
-                }
-                .print-image { 
-                  width: 100%; 
-                  max-width: 100%;
-                  border: 1px solid #e5e7eb;
-                  border-radius: 8px;
-                }
-                .print-footer {
-                  margin-top: 20px;
-                  text-align: center;
-                  font-size: 12px;
-                  color: #94a3b8;
-                  padding-top: 15px;
-                  border-top: 1px solid #e5e7eb;
-                }
-                .no-print { 
-                  margin-top: 20px; 
-                  text-align: center;
-                }
-                .print-btn {
-                  padding: 10px 20px;
-                  background: #4f46e5;
-                  color: white;
-                  border: none;
-                  border-radius: 6px;
-                  cursor: pointer;
-                  font-size: 14px;
-                  font-weight: 500;
-                }
-                .print-btn:hover { background: #4338ca; }
-                .close-btn {
-                  padding: 10px 20px;
-                  background: #6b7280;
-                  color: white;
-                  border: none;
-                  border-radius: 6px;
-                  margin-left: 10px;
-                  cursor: pointer;
-                  font-size: 14px;
-                  font-weight: 500;
-                }
-                .close-btn:hover { background: #4b5563; }
-                @media print {
-                  body { margin: 0; padding: 10mm; }
-                  .no-print { display: none; }
-                  .print-image { border: none; }
-                }
+                body { margin: 0; padding: 20px; font-family: Arial, sans-serif; }
+                img { width: 100%; height: auto; }
               </style>
             </head>
             <body>
-              <div class="print-header">
-                <div class="print-title">Supermarket Sales Dashboard</div>
-              </div>
-              <img src="${dataUrl}" class="print-image" alt="Dashboard" />
-              <div class="print-footer">
-                Generated on ${new Date().toLocaleDateString()} at ${new Date().toLocaleTimeString()}
-              </div>
-              <div class="no-print">
-                <button onclick="window.print()" class="print-btn">Print Now</button>
-                <button onclick="window.close()" class="close-btn">Close</button>
-              </div>
-              <script>
-                window.onload = function() {
-                  setTimeout(() => window.print(), 500);
-                }
-              </script>
+              <img src="${image}" />
+              <script>window.onload = () => { setTimeout(() => { window.print(); window.close(); }, 500); }</script>
             </body>
             </html>
           `);
           printWindow.document.close();
-          break;
         }
       }
     } catch (error) {
-      console.error("Export failed:", error);
-      toast.error("Failed to export. Please try again.", {
-        duration: 3000,
-        position: "top-center",
-      });
+      console.error('Export failed:', error);
+      toast.error('Failed to export. Please try again.');
     } finally {
       setIsExporting(false);
     }
   };
 
-  // File upload handling
-  const handleFileUpload = async (
-    event: React.ChangeEvent<HTMLInputElement>,
-  ) => {
+  return (
+    <Card className="w-full shadow-2xl bg-white overflow-hidden">
+      <CardHeader className="border-b bg-white px-6 py-4">
+        <div className="flex justify-between items-center">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-indigo-600 shadow-lg">
+              <LayoutDashboard className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <CardTitle className="text-xl font-bold text-slate-800">
+                AI-Generated Dashboard
+              </CardTitle>
+              <p className="text-sm text-slate-600">Complete Overview</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            {timestamp && (
+              <Badge className="bg-indigo-100 text-indigo-800 border-indigo-300">
+                <Calendar className="w-3 h-3 mr-1" />
+                {timestamp.toLocaleDateString()}
+              </Badge>
+            )}
+            
+            <div className="relative">
+              <Button
+                onClick={() => setShowDownloadMenu(!showDownloadMenu)}
+                disabled={isExporting}
+                className="bg-indigo-600 hover:bg-indigo-700 text-white shadow-md"
+              >
+                {isExporting ? (
+                  <>
+                    <Download className="w-4 h-4 mr-2 animate-bounce" />
+                    Exporting...
+                  </>
+                ) : (
+                  <>
+                    <Download className="w-4 h-4 mr-2" />
+                    Export
+                  </>
+                )}
+              </Button>
+              
+              {showDownloadMenu && (
+                <>
+                  <div 
+                    className="fixed inset-0 z-40" 
+                    onClick={() => setShowDownloadMenu(false)}
+                  />
+                  <div className="absolute right-0 top-full mt-2 w-56 bg-white rounded-xl shadow-2xl border z-50 overflow-hidden">
+                    <div className="p-2">
+                      <button
+                        onClick={() => handleDownload('png')}
+                        className="flex items-center w-full px-4 py-3 hover:bg-blue-50 rounded-lg transition-colors"
+                      >
+                        <div className="p-2 bg-blue-100 rounded-lg mr-3">
+                          <Image className="w-4 h-4 text-blue-600" />
+                        </div>
+                        <div className="text-left">
+                          <div className="text-sm font-semibold text-slate-800">Download as PNG</div>
+                          <div className="text-xs text-slate-500">High quality image</div>
+                        </div>
+                      </button>
+                      
+                      <button
+                        onClick={() => handleDownload('pdf')}
+                        className="flex items-center w-full px-4 py-3 hover:bg-red-50 rounded-lg transition-colors"
+                      >
+                        <div className="p-2 bg-red-100 rounded-lg mr-3">
+                          <FileText className="w-4 h-4 text-red-600" />
+                        </div>
+                        <div className="text-left">
+                          <div className="text-sm font-semibold text-slate-800">Download as PDF</div>
+                          <div className="text-xs text-slate-500">Professional document</div>
+                        </div>
+                      </button>
+                      
+                      <div className="h-px bg-slate-200 my-2"></div>
+                      
+                      <button
+                        onClick={() => handleDownload('print')}
+                        className="flex items-center w-full px-4 py-3 hover:bg-gray-50 rounded-lg transition-colors"
+                      >
+                        <div className="p-2 bg-gray-100 rounded-lg mr-3">
+                          <Printer className="w-4 h-4 text-gray-700" />
+                        </div>
+                        <div className="text-left">
+                          <div className="text-sm font-semibold text-slate-800">Print</div>
+                          <div className="text-xs text-slate-500">Send to printer</div>
+                        </div>
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      </CardHeader>
+
+      <CardContent ref={dashboardCardRef} className="p-6">
+        {showLoader ? (
+          <div className="min-h-[600px] flex items-center justify-center">
+            <SequentialLoader />
+          </div>
+        ) : dashboardData ? (
+          <div className="space-y-6">
+            {dashboardData.kpis && dashboardData.kpis.length > 0 && (
+              <div>
+                <h3 className="text-lg font-semibold text-slate-800 mb-4 flex items-center gap-2">
+                  <TrendingUp className="w-5 h-5 text-green-600" />
+                  Key Performance Indicators
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                  {dashboardData.kpis.map((kpi: any, i: number) => renderKPICard(kpi, i))}
+                </div>
+              </div>
+            )}
+
+            {dashboardData.charts && dashboardData.charts.length > 0 && (
+              <div>
+                <h3 className="text-lg font-semibold text-slate-800 mb-4 flex items-center gap-2">
+                  <BarChart className="w-5 h-5 text-indigo-600" />
+                  Visualizations
+                </h3>
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {dashboardData.charts.map((chart: any, i: number) => renderChart(chart, i))}
+                </div>
+              </div>
+            )}
+
+            {(!dashboardData.kpis || dashboardData.kpis.length === 0) && 
+             (!dashboardData.charts || dashboardData.charts.length === 0) && (
+              <div className="min-h-[400px] flex flex-col items-center justify-center text-slate-400">
+                <div className="p-4 rounded-full bg-slate-200 mb-4">
+                  <BarChart className="w-12 h-12" />
+                </div>
+                <p className="text-sm font-semibold text-slate-600 mb-1">
+                  No Dashboard Data Available
+                </p>
+                <p className="text-xs text-slate-500">
+                  Generate a dashboard to see all components
+                </p>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="min-h-[400px] flex flex-col items-center justify-center text-slate-400">
+            <div className="p-4 rounded-full bg-slate-200 mb-4">
+              <BarChart className="w-12 h-12" />
+            </div>
+            <p className="text-sm font-semibold text-slate-600 mb-1">
+              No Dashboard Data Available
+            </p>
+            <p className="text-xs text-slate-500">
+              Generate a dashboard to see all components
+            </p>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+};
+
+// ==================== INTERFACES ====================
+
+interface UploadedFile {
+  name: string;
+  size: number;
+  type: string;
+  uploadedAt: Date;
+  isExisting?: boolean;
+}
+
+interface DatabaseFile {
+  id: string;
+  name: string;
+  icon: string;
+}
+
+interface Message {
+  id: string;
+  type: "user" | "bot";
+  content: string;
+  timestamp: Date;
+  files?: string[];
+  dashboardData?: any;
+  visualRendered?: boolean;
+}
+
+// ==================== NAVIGATION BAR COMPONENT ====================
+
+const NavigationBar = ({ userEmail, showUserMenu, setShowUserMenu, handleLogout, handleSettings }: any) => {
+  return (
+    <div className="border-b bg-white p-4 flex items-center justify-between sticky top-0 z-50">
+      <div className="flex items-center gap-3">
+        <div className="p-2 rounded-lg bg-indigo-600 shadow-lg">
+          <LayoutDashboard className="w-5 h-5 text-white" />
+        </div>
+        <div>
+          <h1 className="font-bold text-slate-800">AI Dashboard Generator</h1>
+          <p className="text-sm text-slate-500">Powered by AI</p>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-4">
+        {userEmail && (
+          <div className="relative">
+            <button
+              onClick={() => setShowUserMenu(!showUserMenu)}
+              className="flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-200 hover:border-indigo-300 rounded-lg transition-colors shadow-sm"
+            >
+              <User className="w-4 h-4 text-indigo-600" />
+              <span className="text-sm font-medium text-slate-800">
+                {userEmail.split("@")[0]}
+              </span>
+              <ChevronDown
+                className={`w-3 h-3 text-slate-500 transition-transform ${showUserMenu ? "rotate-180" : ""}`}
+              />
+            </button>
+
+            {showUserMenu && (
+              <>
+                <div
+                  className="fixed inset-0 z-40"
+                  onClick={() => setShowUserMenu(false)}
+                />
+                <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-lg shadow-lg border z-50 overflow-hidden">
+                  <div className="py-1">
+                    <button
+                      onClick={() => {
+                        handleSettings();
+                        setShowUserMenu(false);
+                      }}
+                      className="flex items-center gap-2 w-full px-3 py-2 text-sm text-slate-700 hover:bg-slate-100"
+                    >
+                      <Settings className="w-4 h-4" />
+                      Settings
+                    </button>
+                    <button
+                      onClick={() => {
+                        handleLogout();
+                        setShowUserMenu(false);
+                      }}
+                      className="flex items-center gap-2 w-full px-3 py-2 text-sm text-red-600 hover:bg-red-50"
+                    >
+                      <LogOut className="w-4 h-4" />
+                      Logout
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// ==================== MAIN COMPONENT ====================
+
+export function SalesDashboard() {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const toastShownRef = useRef<string | null>(null); // Fix for double toasts
+
+  // ==================== STATE ====================
+
+  const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
+  const [userEmail, setUserEmail] = useState<string>("");
+  const [showFileDialog, setShowFileDialog] = useState(false);
+  const [selectedFiles, setSelectedFiles] = useState<string[]>([]);
+  const [showFileUploadModal, setShowFileUploadModal] = useState(false);
+  const [recentlyUploadedFile, setRecentlyUploadedFile] = useState<string | null>(null);
+  const [uploadSuccess, setUploadSuccess] = useState(false);
+  const [showUserMenu, setShowUserMenu] = useState(false);
+  const [availableFiles, setAvailableFiles] = useState<DatabaseFile[]>([]);
+  const [isListening, setIsListening] = useState(false);
+  const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
+  const recognitionRef = useRef<any>(null);
+
+  // Chat states
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [inputValue, setInputValue] = useState("");
+  const [lastQuery, setLastQuery] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const [pendingQuery, setPendingQuery] = useState<string | null>(null);
+  const [hasShownNoFileToast, setHasShownNoFileToast] = useState(false); // Fix for double toasts
+
+  // Stores
+  const {
+    loading,
+    hasData,
+    dashboardData,
+    fetchDashboardData,
+    resetDashboard,
+  } = useDashboardStore();
+
+  const { uploading, uploadAndGenerate } = useUploadStore();
+  const { deleteFile } = useDeleteFileStore();
+  const router = useRouter();
+
+  // ==================== EFFECTS ====================
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  useEffect(() => {
+    const email = localStorage.getItem("user_email") || "";
+    setUserEmail(email);
+    loadExistingFiles();
+  }, []);
+
+  // ==================== FIX: Wait for dashboard data to be ready ====================
+  useEffect(() => {
+    if (hasData && dashboardData && isLoading && pendingQuery) {
+      console.log("✅ Dashboard data is ready! Adding bot message with data:", dashboardData);
+      
+      const botMessageId = (Date.now() + 1).toString();
+      const botMessage: Message = {
+        id: botMessageId,
+        type: "bot",
+        content: "Dashboard generated successfully! ✨",
+        timestamp: new Date(),
+        dashboardData: dashboardData,
+        visualRendered: true,
+      };
+      
+      setMessages((prev) => [...prev, botMessage]);
+      setPendingQuery(null);
+      setIsLoading(false);
+      toast.success("Dashboard ready!");
+      toastShownRef.current = null; // Reset toast ref
+    }
+  }, [hasData, dashboardData, isLoading, pendingQuery]);
+
+  // Initialize Speech Recognition
+  useEffect(() => {
+    const SpeechRecognition =
+      (window as any).SpeechRecognition ||
+      (window as any).webkitSpeechRecognition;
+
+    if (SpeechRecognition) {
+      recognitionRef.current = new SpeechRecognition();
+      recognitionRef.current.continuous = false;
+      recognitionRef.current.interimResults = false;
+      recognitionRef.current.lang = "en-US";
+
+      recognitionRef.current.onresult = (event: any) => {
+        const transcript = event.results[0][0].transcript;
+        setInputValue((prev) => prev + (prev ? " " : "") + transcript);
+      };
+
+      recognitionRef.current.onerror = (event: any) => {
+        console.error("Speech recognition error:", event.error);
+        setIsListening(false);
+        toast.error("Speech recognition failed. Please try again.");
+      };
+
+      recognitionRef.current.onend = () => {
+        setIsListening(false);
+      };
+    }
+
+    return () => {
+      if (recognitionRef.current) {
+        recognitionRef.current.abort();
+      }
+    };
+  }, []);
+
+  // Load available files in modal format
+  useEffect(() => {
+    async function loadDataSources() {
+      try {
+        const data = await fetchDataSources();
+        const filesWithIcons = Array.isArray(data) ? data.map((ds: any) => {
+          const fileName = typeof ds === 'string' ? ds : ds.name || 'Unknown';
+          return {
+            id: fileName,
+            name: fileName,
+            icon: fileName.endsWith('.csv') ? '📄' : 
+                  fileName.endsWith('.xlsx') ? '📊' : 
+                  fileName.endsWith('.json') ? '📋' : '📁',
+          };
+        }) : [];
+        setAvailableFiles(filesWithIcons);
+      } catch (error) {
+        console.error("Failed to load data sources:", error);
+      }
+    }
+    loadDataSources();
+  }, [uploadedFiles]);
+
+  // ==================== HELPER FUNCTIONS ====================
+
+  const loadExistingFiles = async () => {
+    try {
+      const existingFiles = await fetchDataSources();
+
+      if (!Array.isArray(existingFiles)) {
+        setUploadedFiles([]);
+        return;
+      }
+
+      const formattedFiles: UploadedFile[] = existingFiles.map((file: any) => {
+        if (typeof file === "string") {
+          return {
+            name: file,
+            size: 0,
+            type: getFileTypeFromName(file),
+            uploadedAt: new Date(),
+            isExisting: true,
+          };
+        }
+
+        return {
+          name: file.name || file.filename || file.originalname || "Unknown file",
+          size: file.size || file.fileSize || 0,
+          type:
+            file.type ||
+            file.mimetype ||
+            getFileTypeFromName(file.name || file.filename || ""),
+          uploadedAt:
+            file.uploadedAt || file.createdAt || file.uploadDate
+              ? new Date(file.uploadedAt || file.createdAt || file.uploadDate)
+              : new Date(),
+          isExisting: true,
+        };
+      });
+
+      setUploadedFiles(formattedFiles);
+      
+      const filesWithIcons = formattedFiles.map((file) => ({
+        id: file.name,
+        name: file.name,
+        icon: file.name.endsWith('.csv') ? '📄' : 
+              file.name.endsWith('.xlsx') ? '📊' : 
+              file.name.endsWith('.json') ? '📋' : '📁',
+      }));
+      setAvailableFiles(filesWithIcons);
+      
+    } catch (error: any) {
+      console.error("Failed to load existing files:", error);
+    }
+  };
+
+  const getFileTypeFromName = (filename: string): string => {
+    if (!filename) return "application/octet-stream";
+    const ext = filename.split(".").pop()?.toLowerCase();
+    switch (ext) {
+      case "csv": return "text/csv";
+      case "xlsx": return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+      case "xls": return "application/vnd.ms-excel";
+      case "json": return "application/json";
+      default: return "application/octet-stream";
+    }
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem("user_email");
+    localStorage.removeItem("auth_token");
+    localStorage.removeItem("token_type");
+    router.push("/");
+  };
+
+  const handleSettings = () => {
+    router.push("/settings");
+  };
+
+  const handleStopRequest = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      setIsLoading(false);
+      setPendingQuery(null);
+      toast.info("Request cancelled");
+      toastShownRef.current = null;
+    }
+  };
+
+  const toggleSpeechRecognition = () => {
+    if (!recognitionRef.current) {
+      toast.error("Speech recognition is not supported in your browser.");
+      return;
+    }
+
+    if (isListening) {
+      recognitionRef.current.stop();
+      setIsListening(false);
+    } else {
+      try {
+        recognitionRef.current.start();
+        setIsListening(true);
+        toast.info("Listening... Speak now.");
+      } catch (error) {
+        console.error("Error starting speech recognition:", error);
+        toast.error("Failed to start speech recognition.");
+      }
+    }
+  };
+
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
     if (!files || files.length === 0) return;
 
     const userEmail = localStorage.getItem("user_email");
     if (!userEmail) {
-      toast.error("Please login first", {
-        duration: 3000,
-        position: "top-center",
-      });
+      toast.error("Please login first");
       return;
     }
 
     try {
-      // Upload files to backend
       await uploadAndGenerate(userEmail, Array.from(files));
-
-      // Update local state for UI
+      
       const newFiles: UploadedFile[] = Array.from(files).map((file) => ({
         name: file.name,
         size: file.size,
         type: file.type,
         uploadedAt: new Date(),
       }));
-
+      
       setUploadedFiles((prev) => [...prev, ...newFiles]);
-
-      // Set the recently uploaded file name for display
-      const uploadedFileName = files[0].name;
-      setRecentlyUploadedFile(uploadedFileName);
+      
+      const newAvailableFiles = Array.from(files).map((file) => ({
+        id: file.name,
+        name: file.name,
+        icon: file.name.endsWith('.csv') ? '📄' : 
+              file.name.endsWith('.xlsx') ? '📊' : 
+              file.name.endsWith('.json') ? '📋' : '📁',
+      }));
+      
+      setAvailableFiles((prev) => [...prev, ...newAvailableFiles]);
+      
+      const fileNames = Array.from(files).map(f => f.name);
+      setSelectedFiles((prev) => [...prev, ...fileNames]);
+      
+      setRecentlyUploadedFile(files[0].name);
       setUploadSuccess(true);
+      toast.success(`Uploaded ${files.length} file(s) successfully!`);
 
-      toast.success(
-        `Uploaded ${files.length} file(s) successfully! Data is ready for analysis.`,
-        {
-          duration: 3000,
-          position: "top-center",
-        },
-      );
-
-      // Wait for 3 seconds, then close upload modal and show file selection dialog
       setTimeout(() => {
         setShowFileUploadModal(false);
         setRecentlyUploadedFile(null);
         setUploadSuccess(false);
-        setShowFileDialog(true);
       }, 3000);
+      
     } catch (error) {
-      console.log("error", error);
-      toast.error("Upload failed. Please try again.", {
-        duration: 3000,
-        position: "top-center",
-      });
+      toast.error("Upload failed. Please try again.");
     }
-
+    
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
   };
 
-  // Delete file from backend
+  // FIX: Prevent double toast on delete
   const handleDeleteFile = async (filename: string) => {
-    // Use toast for confirmation instead of alert
-    toast.custom((t) => (
-      <div className="w-full max-w-md bg-white rounded-lg shadow-lg border p-4">
-        <div className="flex items-start">
-          <div className="flex-shrink-0">
-            <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
-              <Trash2 className="w-5 h-5 text-red-600" />
-            </div>
-          </div>
-          <div className="ml-3 flex-1">
-            <h3 className="text-sm font-semibold text-slate-900">
-              Delete File
-            </h3>
-            <div className="mt-1 text-sm text-slate-600">
-              Are you sure you want to delete{" "}
-              <span className="font-medium text-slate-900">"{filename}"</span>?
-              This action cannot be undone.
-            </div>
-            <div className="mt-3 flex justify-end space-x-2">
-              <button
-                onClick={() => {
-                  toast.dismiss(t);
-                }}
-                className="px-3 py-1.5 text-sm font-medium text-slate-700 hover:text-slate-900 hover:bg-slate-100 rounded-md"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={async () => {
-                  toast.dismiss(t);
-                  await performDelete(filename);
-                }}
-                className="px-3 py-1.5 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-md"
-              >
-                Delete
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    ));
-  };
-
-  // Perform the actual delete operation
-  const performDelete = async (filename: string) => {
-    const originalFiles = [...uploadedFiles]; // Keep backup in case deletion fails
-
     try {
-      // Optimistically remove from UI
-      setUploadedFiles((prev) => prev.filter((file) => file.name !== filename));
-      setSelectedFiles((prev) => prev.filter((file) => file !== filename));
-
-      // Call the deleteFile function from store
       await deleteFile(filename);
-
-      toast.success(`File "${filename}" deleted successfully!`, {
-        duration: 2000,
-        position: "top-center",
-      });
+      setUploadedFiles((prev) => prev.filter((file) => file.name !== filename));
+      setAvailableFiles((prev) => prev.filter((file) => file.id !== filename));
+      setSelectedFiles((prev) => prev.filter((file) => file !== filename));
+      // Only show one toast
+      toast.success(`File "${filename}" deleted successfully!`);
     } catch (error: any) {
       console.error("Delete error:", error);
-
-      // Restore the file if deletion failed
-      setUploadedFiles(originalFiles);
-
-      toast.error(`Failed to delete file: ${error.message}`, {
-        duration: 3000,
-        position: "top-center",
-      });
+      toast.error(`Failed to delete file: ${error.message}`);
     }
-  };
-
-  const handleRefreshFiles = async () => {
-    await loadExistingFiles();
-    toast.success("Files refreshed successfully!", {
-      duration: 2000,
-      position: "top-center",
-    });
   };
 
   const formatFileSize = (bytes: number) => {
@@ -863,52 +1025,164 @@ export function SalesDashboard() {
     return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + " " + sizes[i];
   };
 
-  const handleNewQuery = () => {
-    console.log("🔄 Starting new query, resetting dashboard");
-    resetDashboard();
-    setUploadedFiles([]);
-    setSelectedFiles([]);
-    setQuery("");
-  };
-
-  // Get file names for API call
   const getFileNames = () => {
     if (selectedFiles.length === 0) {
-      toast.warning("Please select at least one file to analyze", {
-        duration: 3000,
-        position: "top-center",
-      });
       return "";
     }
     return selectedFiles.join(",");
   };
 
-  // UPDATED: handleSendQuery function with .csv extension removal
-  const handleSendQuery = async () => {
-    if (!query.trim()) {
-      toast.error("Please enter a query", {
-        duration: 3000,
-        position: "top-center",
-      });
+  // FIX: Quick query and retry should auto-send with proper file check
+  const handleQuickQuery = (query: string) => {
+    setInputValue(query);
+    
+    if (selectedFiles.length === 0) {
+      if (!hasShownNoFileToast) {
+        toast.warning("Please select files before sending a query");
+        setHasShownNoFileToast(true);
+        setTimeout(() => setHasShownNoFileToast(false), 2000);
+      }
+      return;
+    }
+    
+    // Auto-send the query
+    setTimeout(() => {
+      handleSendMessageWithQuery(query);
+    }, 100);
+  };
+
+  // FIX: New function to handle sending with specific query
+  const handleSendMessageWithQuery = async (queryText: string) => {
+    if (!queryText.trim()) {
+      toast.error("Please enter a query");
       return;
     }
 
     const fileNames = getFileNames();
-    if (!fileNames) return;
+    if (!fileNames) {
+      if (!hasShownNoFileToast) {
+        toast.warning("Please select files before sending a query");
+        setHasShownNoFileToast(true);
+        setTimeout(() => setHasShownNoFileToast(false), 2000);
+      }
+      return;
+    }
 
-    // Log the parameters being sent
-    console.log("📤 Sending query to backend:");
-    console.log("  - Query:", query.trim());
-    console.log("  - File Names (original):", fileNames);
-    console.log("  - Selected Files Array:", selectedFiles);
+    const userMessage: Message = {
+      id: Date.now().toString(),
+      type: "user",
+      content: queryText.trim(),
+      timestamp: new Date(),
+      files: selectedFiles,
+    };
+    setMessages((prev) => [...prev, userMessage]);
+    setLastQuery(queryText.trim());
+    setPendingQuery(queryText.trim());
+    setIsLoading(true);
+    setInputValue("");
 
-    // Remove .csv extension from filenames before sending
+    abortControllerRef.current = new AbortController();
+
     const cleanFileNames = selectedFiles
-      .map((file) => file.replace(/\.csv$/i, "")) // Remove .csv extension (case-insensitive)
+      .map((file) => file.replace(/\.csv$/i, ""))
       .join(",");
 
-    console.log("  - Clean File Names (without .csv):", cleanFileNames);
-    await fetchDashboardData(query.trim(), cleanFileNames);
+    try {
+      await fetchDashboardData(queryText.trim(), cleanFileNames);
+    } catch (error) {
+      console.error("Error fetching dashboard:", error);
+
+      const errorMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        type: "bot",
+        content: "Failed to generate dashboard. Please try again.",
+        timestamp: new Date(),
+        visualRendered: false,
+      };
+      setMessages((prev) => [...prev, errorMessage]);
+      setPendingQuery(null);
+      setIsLoading(false);
+      toast.error("Failed to generate dashboard.");
+      abortControllerRef.current = null;
+      toastShownRef.current = null;
+    }
+  };
+
+  // FIX: Modified handleSendMessage to prevent double toasts
+  const handleSendMessage = async () => {
+    if (!inputValue.trim()) {
+      toast.error("Please enter a query");
+      return;
+    }
+
+    const fileNames = getFileNames();
+    if (!fileNames) {
+      if (!hasShownNoFileToast) {
+        toast.warning("Please select files before sending a query");
+        setHasShownNoFileToast(true);
+        setTimeout(() => setHasShownNoFileToast(false), 2000);
+      }
+      return;
+    }
+
+    const userMessage: Message = {
+      id: Date.now().toString(),
+      type: "user",
+      content: inputValue.trim(),
+      timestamp: new Date(),
+      files: selectedFiles,
+    };
+    setMessages((prev) => [...prev, userMessage]);
+    setLastQuery(inputValue.trim());
+    setPendingQuery(inputValue.trim());
+    setIsLoading(true);
+    setInputValue("");
+
+    abortControllerRef.current = new AbortController();
+
+    const cleanFileNames = selectedFiles
+      .map((file) => file.replace(/\.csv$/i, ""))
+      .join(",");
+
+    try {
+      await fetchDashboardData(inputValue.trim(), cleanFileNames);
+    } catch (error) {
+      console.error("Error fetching dashboard:", error);
+
+      const errorMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        type: "bot",
+        content: "Failed to generate dashboard. Please try again.",
+        timestamp: new Date(),
+        visualRendered: false,
+      };
+      setMessages((prev) => [...prev, errorMessage]);
+      setPendingQuery(null);
+      setIsLoading(false);
+      toast.error("Failed to generate dashboard.");
+      abortControllerRef.current = null;
+      toastShownRef.current = null;
+    }
+  };
+
+  // FIX: Handle retry
+  const handleRetry = async () => {
+    if (!lastQuery) return;
+    if (selectedFiles.length === 0) {
+      if (!hasShownNoFileToast) {
+        toast.warning("Please select files before retrying");
+        setHasShownNoFileToast(true);
+        setTimeout(() => setHasShownNoFileToast(false), 2000);
+      }
+      return;
+    }
+    await handleSendMessageWithQuery(lastQuery);
+  };
+
+  const copyToClipboard = (text: string, messageId: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedMessageId(messageId);
+    setTimeout(() => setCopiedMessageId(null), 2000);
   };
 
   const toggleFileSelection = (fileName: string) => {
@@ -921,946 +1195,281 @@ export function SalesDashboard() {
     });
   };
 
-  // Show loading state
-  if (loading || polling) {
-    return (
-      <div className="w-full h-screen bg-gray-50 p-6 flex flex-col items-center justify-center">
-        <Toaster />
-        <SequentialLoader />
-        {polling && currentTaskId && (
-          <div className="mt-4 text-center">
-            {/* <p className="text-sm text-slate-500">
-              Generating dashboard... Task ID: {currentTaskId.slice(0, 8)}...
-            </p> */}
-            {/* <p className="text-xs text-slate-400 mt-1">
-              Polling every 20 seconds for status
-            </p> */}
-            {/* <Button
-              variant="outline"
-              size="sm"
-              onClick={stopPolling}
-              className="mt-2"
-            >
-              Cancel Generation
-            </Button> */}
-          </div>
-        )}
-      </div>
-    );
-  }
+  // ==================== RENDER ====================
+  
+  return (
+    <div className="h-full flex flex-col bg-white min-h-screen">
+      <Toaster />
+      
+      {/* Navigation Bar - Always visible */}
+      <NavigationBar 
+        userEmail={userEmail}
+        showUserMenu={showUserMenu}
+        setShowUserMenu={setShowUserMenu}
+        handleLogout={handleLogout}
+        handleSettings={handleSettings}
+      />
 
-  // Show initial query input (no dashboard yet)
-  if (!hasData) {
-    return (
-      <div className="w-full min-h-screen bg-gray-50 p-6">
-        <Toaster />
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept=".xlsx,.xls,.csv,.json"
-          onChange={handleFileUpload}
-          className="hidden"
-          multiple
-        />
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".xlsx,.xls,.csv,.json"
+        onChange={handleFileUpload}
+        className="hidden"
+        multiple
+      />
 
-        {/* Welcome Section */}
-        <div className="max-w-5xl mx-auto mb-10">
-          {/* User info with dropdown */}
-          {userEmail && (
-            <div className="flex justify-end mb-4 relative">
-              <button
-                onClick={() => setShowUserMenu(!showUserMenu)}
-                className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 hover:border-indigo-300 rounded-lg transition-colors shadow-sm hover:shadow"
+      {/* INITIAL STATE - NO MESSAGES */}
+      {messages.length === 0 ? (
+        <div className="flex-1 flex flex-col items-center justify-center bg-white backdrop-blur-xl">
+          <div className="w-full max-w-4xl mx-auto flex flex-col items-center px-6">
+            {/* Logo */}
+            <div className="mb-8 w-20 h-20 relative">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 200 200"
+                width="100%"
+                height="100%"
+                className="w-full h-full"
               >
-                <User className="w-4 h-4 text-indigo-600" />
-                <span className="text-sm font-medium text-slate-800">
-                  {userEmail}
-                </span>
-                <ChevronDown
-                  className={`w-4 h-4 text-slate-500 transition-transform ${showUserMenu ? "rotate-180" : ""}`}
-                />
-              </button>
-
-              {/* User dropdown menu */}
-              {showUserMenu && (
-                <>
-                  <div
-                    className="fixed inset-0 z-40"
-                    onClick={() => setShowUserMenu(false)}
-                  />
-                  <div className="absolute right-0 top-full mt-2 w-64 bg-white rounded-lg shadow-lg border z-50 overflow-hidden">
-                    <div className="p-3 border-b">
-                      <div className="flex items-center gap-2 mb-2">
-                        <User className="w-4 h-4 text-indigo-600" />
-                        <span className="text-sm font-medium text-slate-800 truncate">
-                          {userEmail}
-                        </span>
-                      </div>
-                      <div className="text-xs text-slate-500">
-                        Chat ID: {currentChatId} | Message:{" "}
-                        {dashboardAPI.getFormattedMessageId()}
-                      </div>
-                    </div>
-
-                    <div className="max-h-64 overflow-y-auto">
-                      {/* Chat History */}
-                      <div className="p-2">
-                        <div className="flex items-center justify-between px-2 py-1">
-                          <span className="text-xs font-semibold text-slate-700">
-                            Chat Sessions
-                          </span>
-                          <button
-                            onClick={() => {
-                              startNewChat();
-                              setShowUserMenu(false);
-                            }}
-                            className="text-xs text-indigo-600 hover:text-indigo-700"
-                          >
-                            + New
-                          </button>
-                        </div>
-
-                        {chatHistory.length === 0 ? (
-                          <div className="px-2 py-3 text-center">
-                            <p className="text-xs text-slate-500">
-                              No chat history
-                            </p>
-                          </div>
-                        ) : (
-                          <div className="space-y-1">
-                            {/* Group by chat_id */}
-                            {Array.from(
-                              new Set(chatHistory.map((msg) => msg.chat_id)),
-                            ).map((chatId) => {
-                              const chatMessages = chatHistory.filter(
-                                (msg) => msg.chat_id === chatId,
-                              );
-                              const lastMessage =
-                                chatMessages[chatMessages.length - 1];
-                              const isActive = chatId === currentChatId;
-
-                              return (
-                                <button
-                                  key={chatId}
-                                  onClick={() => {
-                                    loadChat(chatId);
-                                    setShowUserMenu(false);
-                                  }}
-                                  className={`w-full text-left px-2 py-1.5 rounded text-xs ${
-                                    isActive
-                                      ? "bg-indigo-50 text-indigo-700"
-                                      : "hover:bg-slate-100 text-slate-700"
-                                  }`}
-                                >
-                                  <div className="flex justify-between items-center">
-                                    <span className="font-medium">
-                                      Chat #{chatId}
-                                    </span>
-                                    <span className="text-xs text-slate-400">
-                                      {chatMessages.length} msg
-                                    </span>
-                                  </div>
-                                  {lastMessage && (
-                                    <div className="truncate text-xs text-slate-500 mt-0.5">
-                                      {lastMessage.query.substring(0, 30)}...
-                                    </div>
-                                  )}
-                                </button>
-                              );
-                            })}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="border-t">
-                      <button
-                        onClick={() => {
-                          handleSettings();
-                          setShowUserMenu(false);
-                        }}
-                        className="flex items-center gap-2 w-full px-3 py-2 text-sm text-slate-700 hover:bg-slate-100 transition-colors"
-                      >
-                        <Settings className="w-4 h-4" />
-                        Settings
-                      </button>
-                      <button
-                        onClick={() => {
-                          handleLogout();
-                          setShowUserMenu(false);
-                        }}
-                        className="flex items-center gap-2 w-full px-3 py-2 text-sm text-red-700 hover:bg-red-50 transition-colors"
-                      >
-                        <LogOut className="w-4 h-4" />
-                        Logout
-                      </button>
-                    </div>
-                  </div>
-                </>
-              )}
-            </div>
-          )}
-
-          <div className="text-center mb-8">
-            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-indigo-100 mb-4">
-              <LayoutDashboard className="w-8 h-8 text-indigo-600" />
-            </div>
-            <h1 className="text-3xl font-bold text-slate-800 mb-3">
-              AI-Powered Dashboard Generator
-            </h1>
-            <p className="text-lg text-slate-600 max-w-2xl mx-auto">
-              Describe what kind of dashboard you want, and our AI will generate
-              it for you with interactive charts and insights.
-            </p>
-          </div>
-
-          {/* Query Input with Upload Button */}
-          <div className="w-full max-w-5xl mx-auto mb-6 space-y-3">
-            {/* Query Input Form */}
-            <div className="flex gap-2">
-              <div className="flex-1 relative">
-                <div className="bg-white border-2 border-slate-200 focus-within:border-indigo-500 rounded-md overflow-hidden">
-                  <textarea
-                    value={query}
-                    onChange={(e) => setQuery(e.target.value)}
-                    placeholder="Ask for a dashboard based on your uploaded data (e.g., 'Plot a sales Dashboard')"
-                    className="w-full text-base h-32 px-4 py-3 outline-none resize-none"
-                    disabled={loading}
-                  />
-
-                  {/* Selected files display inside chat bubble */}
-                  {selectedFiles.length > 0 && (
-                    <div className="px-4 py-2 border-t border-slate-100 bg-slate-50">
-                      <div className="flex items-center gap-2 mb-1">
-                        <File className="w-3 h-3 text-slate-500" />
-                        <span className="text-xs text-slate-500">
-                          Selected files:
-                        </span>
-                      </div>
-                      <div className="flex flex-wrap gap-1">
-                        {selectedFiles.map((file) => (
-                          <div
-                            key={file}
-                            className="flex items-center gap-1 bg-white px-2 py-1 rounded border border-slate-200"
-                          >
-                            <File className="w-3 h-3 text-slate-500" />
-                            <span className="text-xs text-slate-700 truncate max-w-[80px]">
-                              {file}
-                            </span>
-                            <button
-                              onClick={() => toggleFileSelection(file)}
-                              className="text-slate-400 hover:text-red-500"
-                            >
-                              <X className="w-3 h-3" />
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="px-4 py-2 border-t border-slate-100 flex items-center justify-between">
-                    {/* Plus button for file selection */}
-                    <button
-                      onClick={() => setShowFileDialog(true)}
-                      className="p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-md transition-colors flex items-center gap-2"
-                      title="Select files"
+                <g clipPath="url(#cs_clip_1_ellipse-12)">
+                  <mask
+                    id="cs_mask_1_ellipse-12"
+                    style={{ maskType: "alpha" }}
+                    width="200"
+                    height="200"
+                    x="0"
+                    y="0"
+                    maskUnits="userSpaceOnUse"
+                  >
+                    <path
+                      fill="#fff"
+                      fillRule="evenodd"
+                      d="M100 150c27.614 0 50-22.386 50-50s-22.386-50-50-50-50 22.386-50 50 22.386 50 50 50zm0 50c55.228 0 100-44.772 100-100S155.228 0 100 0 0 44.772 0 100s44.772 100 100 100z"
+                      clipRule="evenodd"
+                    ></path>
+                  </mask>
+                  <g mask="url(#cs_mask_1_ellipse-12)">
+                    <path fill="#fff" d="M200 0H0v200h200V0z"></path>
+                    <path
+                      fill="#0066FF"
+                      fillOpacity="0.33"
+                      d="M200 0H0v200h200V0z"
+                    ></path>
+                    <g
+                      filter="url(#filter0_f_844_2811)"
+                      className="animate-gradient"
                     >
-                      <Plus className="w-5 h-5" />
-                      <span className="text-sm">Select Files</span>
-                    </button>
-
-                    <div className="flex items-center gap-2">
-                      {/* Send button inside chat bubble */}
-                      <button
-                        onClick={handleSendQuery}
-                        disabled={
-                          !query.trim() || selectedFiles.length === 0 || loading
-                        }
-                        className={`p-2 rounded-full transition-colors ${
-                          query.trim() && selectedFiles.length > 0 && !loading
-                            ? "bg-indigo-600 text-white hover:bg-indigo-700"
-                            : "bg-gray-100 text-gray-400 cursor-not-allowed"
-                        }`}
-                      >
-                        <Send className="w-5 h-5" />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
+                      <path fill="#0066FF" d="M110 32H18v68h92V32z"></path>
+                      <path fill="#0044FF" d="M188-24H15v98h173v-98z"></path>
+                      <path fill="#0099FF" d="M175 70H5v156h170V70z"></path>
+                      <path fill="#00CCFF" d="M230 51H100v103h130V51z"></path>
+                    </g>
+                  </g>
+                </g>
+                <defs>
+                  <filter
+                    id="filter0_f_844_2811"
+                    width="385"
+                    height="410"
+                    x="-75"
+                    y="-104"
+                    colorInterpolationFilters="sRGB"
+                    filterUnits="userSpaceOnUse"
+                  >
+                    <feFlood floodOpacity="0" result="BackgroundImageFix"></feFlood>
+                    <feBlend
+                      in="SourceGraphic"
+                      in2="BackgroundImageFix"
+                      result="shape"
+                    ></feBlend>
+                    <feGaussianBlur
+                      result="effect1_foregroundBlur_844_2811"
+                      stdDeviation="40"
+                    ></feGaussianBlur>
+                  </filter>
+                  <clipPath id="cs_clip_1_ellipse-12">
+                    <path fill="#fff" d="M0 0H200V200H0z"></path>
+                  </clipPath>
+                </defs>
+                <g
+                  style={{ mixBlendMode: "overlay" }}
+                  mask="url(#cs_mask_1_ellipse-12)"
+                >
+                  <path
+                    fill="gray"
+                    stroke="transparent"
+                    d="M200 0H0v200h200V0z"
+                    filter="url(#cs_noise_1_ellipse-12)"
+                  ></path>
+                </g>
+                <defs>
+                  <filter
+                    id="cs_noise_1_ellipse-12"
+                    width="100%"
+                    height="100%"
+                    x="0%"
+                    y="0%"
+                    filterUnits="objectBoundingBox"
+                  >
+                    <feTurbulence
+                      baseFrequency="0.6"
+                      numOctaves="5"
+                      result="out1"
+                      seed="4"
+                    ></feTurbulence>
+                    <feComposite
+                      in="out1"
+                      in2="SourceGraphic"
+                      operator="in"
+                      result="out2"
+                    ></feComposite>
+                    <feBlend
+                      in="SourceGraphic"
+                      in2="out2"
+                      mode="overlay"
+                      result="out3"
+                    ></feBlend>
+                  </filter>
+                </defs>
+              </svg>
             </div>
 
-            {/* Quick Query Buttons */}
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-sm text-slate-600 flex items-center gap-1">
-                <Globe className="w-4 h-4" />
-                Quick queries:
-              </span>
-              {[
-                "Plot a sales Dashboard",
-                "Show me product performance",
-                "Analyze branch sales",
-              ].map((q, index) => (
-                <Button
-                  key={index}
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    setQuery(q);
-                    const fileNames = getFileNames();
-                    if (fileNames) {
-                      // Remove .csv extension before sending for quick queries too
-                      const cleanFileNames = selectedFiles
-                        .map((file) => file.replace(/\.csv$/i, ""))
-                        .join(",");
-                      fetchDashboardData(q, cleanFileNames);
+            {/* Welcome Text */}
+            <div className="mb-10 text-center">
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.3 }}
+                className="flex flex-col items-center"
+              >
+                <h1 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-blue-400 mb-2">
+                  Adro is here to assist you
+                </h1>
+                <p className="text-gray-500 max-w-md">
+                  Ask me anything or try one of the suggestions below
+                </p>
+              </motion.div>
+            </div>
+
+            {/* Input Area - Always at bottom in initial state via flex layout */}
+            <div className="w-full bg-white/70 border border-white/20 rounded-2xl shadow-2xl overflow-hidden mb-4">
+              <div className="p-4 pb-0 relative">
+                <textarea
+                  ref={inputRef}
+                  placeholder="Ask me anything..."
+                  value={inputValue}
+                  onChange={(e) => setInputValue(e.target.value)}
+                  onKeyPress={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      handleSendMessage();
                     }
                   }}
-                  disabled={loading}
-                  className="text-sm border-slate-300 hover:border-indigo-400 hover:bg-indigo-50"
-                >
-                  {q}
-                </Button>
-              ))}
-            </div>
-          </div>
-
-          {/* Quick Start Examples */}
-          <div className="mt-12">
-            <h3 className="text-lg font-semibold text-slate-800 mb-4 text-center">
-              Try these examples:
-            </h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 max-w-4xl mx-auto">
-              <Card
-                className="shadow-sm hover:shadow-md transition-shadow cursor-pointer"
-                onClick={() => {
-                  const fileNames = getFileNames();
-                  if (fileNames) {
-                    // Remove .csv extension before sending
-                    const cleanFileNames = selectedFiles
-                      .map((file) => file.replace(/\.csv$/i, ""))
-                      .join(",");
-                    fetchDashboardData(
-                      "Plot a sales Dashboard",
-                      cleanFileNames,
-                    );
-                  }
-                }}
-              >
-                <CardContent className="p-6">
-                  <div className="flex items-center gap-3 mb-3">
-                    <div className="p-2 rounded-lg bg-green-100">
-                      <TrendingUp className="w-5 h-5 text-green-600" />
-                    </div>
-                    <CardTitle className="text-base">Sales Dashboard</CardTitle>
-                  </div>
-                  <p className="text-sm text-slate-600">
-                    Generate a complete sales performance dashboard with charts
-                    and KPIs.
-                  </p>
-                </CardContent>
-              </Card>
-
-              <Card
-                className="shadow-sm hover:shadow-md transition-shadow cursor-pointer"
-                onClick={() => {
-                  const fileNames = getFileNames();
-                  if (fileNames) {
-                    // Remove .csv extension before sending
-                    const cleanFileNames = selectedFiles
-                      .map((file) => file.replace(/\.csv$/i, ""))
-                      .join(",");
-                    fetchDashboardData(
-                      "Show me product performance",
-                      cleanFileNames,
-                    );
-                  }
-                }}
-              >
-                <CardContent className="p-6">
-                  <div className="flex items-center gap-3 mb-3">
-                    <div className="p-2 rounded-lg bg-blue-100">
-                      <BarChart className="w-5 h-5 text-blue-600" />
-                    </div>
-                    <CardTitle className="text-base">
-                      Product Analysis
-                    </CardTitle>
-                  </div>
-                  <p className="text-sm text-slate-600">
-                    Analyze product performance across different categories and
-                    metrics.
-                  </p>
-                </CardContent>
-              </Card>
-
-              <Card
-                className="shadow-sm hover:shadow-md transition-shadow cursor-pointer"
-                onClick={() => {
-                  const fileNames = getFileNames();
-                  if (fileNames) {
-                    // Remove .csv extension before sending
-                    const cleanFileNames = selectedFiles
-                      .map((file) => file.replace(/\.csv$/i, ""))
-                      .join(",");
-                    fetchDashboardData("Analyze branch sales", cleanFileNames);
-                  }
-                }}
-              >
-                <CardContent className="p-6">
-                  <div className="flex items-center gap-3 mb-3">
-                    <div className="p-2 rounded-lg bg-purple-100">
-                      <Globe className="w-5 h-5 text-purple-600" />
-                    </div>
-                    <CardTitle className="text-base">
-                      Branch Comparison
-                    </CardTitle>
-                  </div>
-                  <p className="text-sm text-slate-600">
-                    Compare performance across different branches and locations.
-                  </p>
-                </CardContent>
-              </Card>
-            </div>
-          </div>
-        </div>
-
-        {/* File Selection Dialog */}
-        {showFileDialog && (
-          <>
-            <div
-              className="fixed inset-0 bg-black/50 z-50"
-              onClick={() => setShowFileDialog(false)}
-            />
-            <div className="fixed left-1/2 top-1/2 transform -translate-x-1/2 -translate-y-1/2 w-full max-w-4xl h-[80vh] bg-white rounded-lg shadow-xl z-50 flex flex-col">
-              <div className="p-6 border-b flex-shrink-0">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <Database className="w-6 h-6 text-indigo-600" />
-                    <div>
-                      <h3 className="text-lg font-semibold text-slate-800">
-                        Select Data Sources
-                      </h3>
-                      <p className="text-sm text-slate-500">
-                        Choose the data sources you want to analyze
-                      </p>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => setShowFileDialog(false)}
-                    className="p-2 hover:bg-slate-100 rounded-md"
-                  >
-                    <X className="w-5 h-5 text-slate-500" />
-                  </button>
-                </div>
-              </div>
-
-              <div className="flex-1 flex gap-6 p-6 overflow-hidden">
-                {/* Left side - Available files */}
-                <div className="flex-1 flex flex-col border border-slate-200 rounded-lg bg-white">
-                  <div className="p-4 border-b">
-                    <div className="flex items-center justify-between mb-2">
-                      <h4 className="font-semibold text-slate-800">
-                        Available Files
-                      </h4>
-                      <Badge variant="secondary">
-                        {uploadedFiles.length} available
-                      </Badge>
-                    </div>
-                    <p className="text-sm text-slate-500">
-                      Select files from your uploaded data
-                    </p>
-                  </div>
-
-                  <div className="flex-1 overflow-auto p-4">
-                    {uploadedFiles.length === 0 ? (
-                      <div className="flex flex-col items-center justify-center h-full py-12">
-                        <File className="w-12 h-12 text-slate-300 mb-3" />
-                        <p className="text-base text-slate-500 font-medium">
-                          No files available
-                        </p>
-                        <p className="text-sm text-slate-400 mt-1">
-                          Upload files to start analyzing data
-                        </p>
-                      </div>
-                    ) : (
-                      <div className="space-y-2">
-                        {uploadedFiles.map((file) => (
-                          <div
-                            key={file.name}
-                            className="flex items-center justify-between p-3 bg-slate-50 hover:bg-slate-100 rounded-lg border border-slate-200 transition-colors"
-                          >
-                            <div className="flex items-center gap-3 flex-1 min-w-0">
-                              <div className="p-2 rounded-md bg-indigo-100">
-                                <File className="w-4 h-4 text-indigo-600" />
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <p className="text-sm font-medium text-slate-800 truncate">
-                                  {file.name}
-                                </p>
-                                <div className="flex items-center gap-2 mt-1">
-                                  <span className="text-xs text-slate-500">
-                                    {formatFileSize(file.size)}
-                                  </span>
-                                  <span className="text-xs text-slate-400">
-                                    •
-                                  </span>
-                                  <span className="text-xs text-slate-500">
-                                    {file.uploadedAt.toLocaleDateString()}
-                                  </span>
-                                  {file.isExisting && (
-                                    <span className="text-xs bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded">
-                                      Existing
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-1">
-                              <button
-                                onClick={() => toggleFileSelection(file.name)}
-                                className={`p-1.5 rounded-md transition-colors ${
-                                  selectedFiles.includes(file.name)
-                                    ? "bg-indigo-100 text-indigo-600 hover:bg-indigo-200"
-                                    : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                                }`}
-                                title={
-                                  selectedFiles.includes(file.name)
-                                    ? "Remove from selection"
-                                    : "Add to selection"
-                                }
-                              >
-                                {selectedFiles.includes(file.name) ? (
-                                  <X className="w-4 h-4" />
-                                ) : (
-                                  <Plus className="w-4 h-4" />
-                                )}
-                              </button>
-                              <button
-                                onClick={() => handleDeleteFile(file.name)}
-                                disabled={deleteLoading}
-                                className="p-1.5 text-red-600 hover:bg-red-100 rounded-md transition-colors"
-                                title="Delete file"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="p-4 border-t">
-                    <button
-                      onClick={() => {
-                        setShowFileDialog(false);
-                        setShowFileUploadModal(true);
-                      }}
-                      className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 rounded-lg transition-colors"
-                    >
-                      <Upload className="w-5 h-5" />
-                      <span className="font-medium">Upload New File</span>
-                    </button>
-                  </div>
-                </div>
-
-                {/* Right side - Selected files */}
-                <div className="flex-1 flex flex-col border border-slate-200 rounded-lg bg-white">
-                  <div className="p-4 border-b">
-                    <div className="flex items-center justify-between mb-2">
-                      <h4 className="font-semibold text-slate-800">
-                        Selected Files
-                      </h4>
-                      {selectedFiles.length > 0 && (
-                        <Badge variant="secondary">
-                          {selectedFiles.length} selected
-                        </Badge>
-                      )}
-                    </div>
-                    <p className="text-sm text-slate-500">
-                      Files that will be used for analysis
-                    </p>
-                  </div>
-
-                  <div className="flex-1 overflow-auto p-4">
-                    {selectedFiles.length === 0 ? (
-                      <div className="flex flex-col items-center justify-center h-full py-12">
-                        <File className="w-12 h-12 text-slate-300 mb-3" />
-                        <p className="text-base text-slate-500 font-medium">
-                          No files selected
-                        </p>
-                        <p className="text-sm text-slate-400 mt-1">
-                          Select files from the left panel
-                        </p>
-                      </div>
-                    ) : (
-                      <div className="space-y-2">
-                        {selectedFiles.map((fileName) => {
-                          const file = uploadedFiles.find(
-                            (f) => f.name === fileName,
-                          );
-                          return (
-                            <div
-                              key={fileName}
-                              className="flex items-center justify-between p-3 bg-indigo-50 hover:bg-indigo-100 rounded-lg border border-indigo-200 transition-colors"
-                            >
-                              <div className="flex items-center gap-3 flex-1 min-w-0">
-                                <div className="p-2 rounded-md bg-indigo-100">
-                                  <File className="w-4 h-4 text-indigo-600" />
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-sm font-medium text-slate-800 truncate">
-                                    {fileName}
-                                  </p>
-                                  {file && (
-                                    <div className="flex items-center gap-2 mt-1">
-                                      <span className="text-xs text-slate-500">
-                                        {formatFileSize(file.size)}
-                                      </span>
-                                      <span className="text-xs text-slate-400">
-                                        •
-                                      </span>
-                                      <span className="text-xs text-slate-500">
-                                        {file.uploadedAt.toLocaleDateString()}
-                                      </span>
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-                              <button
-                                onClick={() => toggleFileSelection(fileName)}
-                                className="p-1.5 text-red-600 hover:bg-red-100 rounded-md transition-colors"
-                                title="Remove file"
-                              >
-                                <X className="w-4 h-4" />
-                              </button>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="p-4 border-t">
-                    {selectedFiles.length > 0 && (
-                      <button
-                        onClick={() => setSelectedFiles([])}
-                        className="w-full px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg border border-red-200 transition-colors"
-                      >
-                        Clear All Selections
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              <div className="p-6 border-t flex-shrink-0 flex justify-end gap-3">
-                <Button
-                  variant="outline"
-                  onClick={() => setShowFileDialog(false)}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  onClick={() => setShowFileDialog(false)}
-                  className="bg-indigo-600 hover:bg-indigo-700"
-                >
-                  Done
-                </Button>
-              </div>
-            </div>
-          </>
-        )}
-
-        {/* File Upload Modal */}
-        {showFileUploadModal && (
-          <>
-            <div
-              className="fixed inset-0 bg-black/50 z-50"
-              onClick={() => setShowFileUploadModal(false)}
-            />
-            <div className="fixed left-1/2 top-1/2 transform -translate-x-1/2 -translate-y-1/2 w-full max-w-lg bg-white rounded-lg shadow-xl z-50">
-              <div className="p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-semibold text-slate-800">
-                    Upload New File
-                  </h3>
-                  <button
-                    onClick={() => setShowFileUploadModal(false)}
-                    className="p-1 hover:bg-slate-100 rounded-md"
-                  >
-                    <X className="w-5 h-5 text-slate-500" />
-                  </button>
-                </div>
-
-                <div className="space-y-4">
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept=".xlsx,.xls,.csv,.json"
-                    onChange={handleFileUpload}
-                    className="hidden"
-                    multiple
-                  />
-
-                  {/* Upload success message */}
-                  {uploadSuccess && recentlyUploadedFile ? (
-                    <div className="border-2 border-green-500 rounded-lg p-8 text-center bg-green-50">
-                      <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-green-100 flex items-center justify-center">
-                        <Check className="w-8 h-8 text-green-600" />
-                      </div>
-                      <h4 className="text-lg font-semibold text-green-700 mb-2">
-                        Upload Successful!
-                      </h4>
-                      <p className="text-green-600 mb-1">
-                        File uploaded:{" "}
-                        <span className="font-medium">
-                          {recentlyUploadedFile}
-                        </span>
-                      </p>
-                      <p className="text-sm text-green-500">
-                        Returning to file selection in 3 seconds...
-                      </p>
-                    </div>
-                  ) : (
-                    <>
-                      <div
-                        onClick={() => fileInputRef.current?.click()}
-                        className="border-2 border-dashed border-slate-300 rounded-lg p-8 text-center cursor-pointer hover:border-indigo-500 transition-colors"
-                      >
-                        <Upload className="w-12 h-12 text-slate-400 mx-auto mb-4" />
-                        <p className="text-slate-600 font-medium">
-                          Click to upload files
-                        </p>
-                        <p className="text-sm text-slate-500 mt-1">
-                          Supported formats: CSV, Excel, JSON
-                        </p>
-                      </div>
-
-                      {uploading && (
-                        <div className="flex items-center justify-center">
-                          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-600"></div>
-                          <span className="ml-2 text-sm text-slate-600">
-                            Uploading...
-                          </span>
-                        </div>
-                      )}
-                    </>
-                  )}
-                </div>
-
-                <div className="flex justify-end gap-2 mt-6">
-                  <Button
-                    variant="outline"
-                    onClick={() => setShowFileUploadModal(false)}
-                  >
-                    Cancel
-                  </Button>
-                </div>
-              </div>
-            </div>
-          </>
-        )}
-      </div>
-    );
-  }
-
-  // Show dashboard with data
-  return (
-    <div className="w-full h-full bg-gray-50 p-6">
-      <Toaster />
-
-      {/* Top Navigation Bar - REMOVED SETTINGS AND LOGOUT FROM HERE */}
-      <div className="max-w-7xl mx-auto mb-4 flex justify-between items-center">
-        <div className="flex items-center gap-2">
-          <Button
-            onClick={handleNewQuery}
-            variant="outline"
-            className="border-indigo-300 text-indigo-700 hover:bg-indigo-50"
-          >
-            <ArrowLeft className="w-4 h-4 mr-2" />
-            New Query
-          </Button>
-
-          {/* User info with dropdown in dashboard view */}
-          {userEmail && (
-            <div className="relative">
-              <button
-                onClick={() => setShowUserMenu(!showUserMenu)}
-                className="flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-200 hover:border-indigo-300 rounded-lg transition-colors shadow-sm"
-              >
-                <User className="w-4 h-4 text-indigo-600" />
-                <span className="text-sm font-medium text-slate-800">
-                  {userEmail.split("@")[0]} {/* Show only username */}
-                </span>
-                <ChevronDown
-                  className={`w-3 h-3 text-slate-500 transition-transform ${showUserMenu ? "rotate-180" : ""}`}
+                  className="w-full text-gray-700 bg-transparent text-base outline-none placeholder:text-gray-400 pr-20 resize-none"
+                  rows={3}
                 />
-              </button>
+              </div>
 
-              {/* User dropdown menu */}
-              {showUserMenu && (
-                <>
-                  <div
-                    className="fixed inset-0 z-40"
-                    onClick={() => setShowUserMenu(false)}
-                  />
-                  <div className="absolute left-0 top-full mt-2 w-64 bg-white rounded-lg shadow-lg border z-50 overflow-hidden">
-                    <div className="p-3 border-b">
-                      <div className="flex items-center gap-2 mb-2">
-                        <User className="w-4 h-4 text-indigo-600" />
-                        <span className="text-sm font-medium text-slate-800 truncate">
-                          {userEmail}
-                        </span>
-                      </div>
-                      <div className="text-xs text-slate-500">
-                        Chat ID: {currentChatId} | Message:{" "}
-                        {dashboardAPI.getFormattedMessageId()}
-                      </div>
-                    </div>
+              <div className="px-4 py-3 flex items-center gap-3 border-t border-white/30">
+                <button
+                  onClick={() => setShowFileDialog(true)}
+                  className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100/50 rounded-lg transition-colors flex-shrink-0"
+                  title="Attach files"
+                >
+                  <Plus className="w-5 h-5" />
+                </button>
 
-                    <div className="max-h-64 overflow-y-auto">
-                      {/* Chat History */}
-                      <div className="p-2">
-                        <div className="flex items-center justify-between px-2 py-1">
-                          <span className="text-xs font-semibold text-slate-700">
-                            Chat Sessions
+                {selectedFiles.length > 0 && (
+                  <div className="flex items-center gap-2 flex-wrap flex-1 min-w-0">
+                    {selectedFiles.map((fileId) => {
+                      const file = availableFiles.find((f) => f.id === fileId);
+                      return (
+                        <div
+                          key={fileId}
+                          className="flex items-center gap-2 bg-gray-50/70 py-1 px-2 rounded-md border border-gray-200/50 flex-shrink-0"
+                        >
+                          <span className="text-md">{file?.icon}</span>
+                          <span className="text-xs text-gray-700 whitespace-nowrap">
+                            {file?.name}
                           </span>
                           <button
-                            onClick={() => {
-                              startNewChat();
-                              setShowUserMenu(false);
-                            }}
-                            className="text-xs text-indigo-600 hover:text-indigo-700"
+                            onClick={() => toggleFileSelection(fileId)}
+                            className="text-gray-400 hover:text-gray-600"
                           >
-                            + New
+                            <X className="w-3 h-3" />
                           </button>
                         </div>
-
-                        {chatHistory.length === 0 ? (
-                          <div className="px-2 py-3 text-center">
-                            <p className="text-xs text-slate-500">
-                              No chat history
-                            </p>
-                          </div>
-                        ) : (
-                          <div className="space-y-1">
-                            {/* Group by chat_id */}
-                            {Array.from(
-                              new Set(chatHistory.map((msg) => msg.chat_id)),
-                            ).map((chatId) => {
-                              const chatMessages = chatHistory.filter(
-                                (msg) => msg.chat_id === chatId,
-                              );
-                              const lastMessage =
-                                chatMessages[chatMessages.length - 1];
-                              const isActive = chatId === currentChatId;
-
-                              return (
-                                <button
-                                  key={chatId}
-                                  onClick={() => {
-                                    loadChat(chatId);
-                                    setShowUserMenu(false);
-                                  }}
-                                  className={`w-full text-left px-2 py-1.5 rounded text-xs ${
-                                    isActive
-                                      ? "bg-indigo-50 text-indigo-700"
-                                      : "hover:bg-slate-100 text-slate-700"
-                                  }`}
-                                >
-                                  <div className="flex justify-between items-center">
-                                    <span className="font-medium">
-                                      Chat #{chatId}
-                                    </span>
-                                    <span className="text-xs text-slate-400">
-                                      {chatMessages.length} msg
-                                    </span>
-                                  </div>
-                                  {lastMessage && (
-                                    <div className="truncate text-xs text-slate-500 mt-0.5">
-                                      {lastMessage.query.substring(0, 30)}...
-                                    </div>
-                                  )}
-                                </button>
-                              );
-                            })}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="border-t">
-                      <button
-                        onClick={() => {
-                          handleSettings();
-                          setShowUserMenu(false);
-                        }}
-                        className="flex items-center gap-2 w-full px-3 py-2 text-sm text-slate-700 hover:bg-slate-100 transition-colors"
-                      >
-                        <Settings className="w-4 h-4" />
-                        Settings
-                      </button>
-                      <button
-                        onClick={() => {
-                          handleLogout();
-                          setShowUserMenu(false);
-                        }}
-                        className="flex items-center gap-2 w-full px-3 py-2 text-sm text-red-700 hover:bg-red-50 transition-colors"
-                      >
-                        <LogOut className="w-4 h-4" />
-                        Logout
-                      </button>
-                    </div>
+                      );
+                    })}
                   </div>
-                </>
-              )}
-            </div>
-          )}
+                )}
 
-          {/* REMOVED SETTINGS AND LOGOUT BUTTONS FROM HERE */}
-        </div>
-      </div>
+                {selectedFiles.length === 0 && <div className="flex-1" />}
 
-      {/* Chat History Sidebar */}
-      <div className="fixed left-4 top-24 z-30">
-        <button
-          onClick={() => setShowChatHistory(!showChatHistory)}
-          className="p-2 bg-white rounded-lg shadow-md border hover:shadow-lg transition-shadow"
-          title="Chat History"
-        >
-          <FileText className="w-5 h-5 text-slate-600" />
-        </button>
-
-        {showChatHistory && (
-          <div className="absolute left-full ml-2 top-0 w-80 bg-white rounded-lg shadow-xl border max-h-[calc(100vh-8rem)] overflow-hidden">
-            <div className="p-4 border-b bg-slate-50">
-              <h3 className="font-semibold text-slate-800">Chat History</h3>
-              <p className="text-sm text-slate-500">
-                Current Chat ID: {currentChatId}
-              </p>
-            </div>
-
-            <div className="overflow-y-auto max-h-96 p-3">
-              {chatHistory.length === 0 ? (
-                <div className="text-center py-8">
-                  <FileText className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-                  <p className="text-slate-500">No chat history yet</p>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <button
+                    onClick={toggleSpeechRecognition}
+                    className={`p-2 rounded-lg transition-colors ${
+                      isListening
+                        ? "bg-red-100 text-red-600 hover:bg-red-200"
+                        : "text-gray-500 hover:text-gray-700 hover:bg-gray-100/50"
+                    }`}
+                    title={isListening ? "Stop listening" : "Start voice input"}
+                  >
+                    <Mic className="w-5 h-5" />
+                  </button>
+                  
+                  {isLoading ? (
+                    <button
+                      onClick={handleStopRequest}
+                      className="w-8 h-8 flex items-center justify-center rounded-full bg-red-600 text-white hover:bg-red-700 transition-colors"
+                      title="Stop generation"
+                    >
+                      <CircleStop className="w-4 h-4" />
+                    </button>
+                  ) : (
+                    <button
+                      onClick={handleSendMessage}
+                      disabled={!inputValue.trim()}
+                      className={`w-8 h-8 flex items-center justify-center rounded-full transition-colors ${
+                        inputValue.trim()
+                          ? "bg-blue-600 text-white hover:bg-blue-700"
+                          : "bg-gray-100/70 text-gray-400 cursor-not-allowed"
+                      }`}
+                    >
+                      <ArrowUp className="w-4 h-4" />
+                    </button>
+                  )}
                 </div>
-              ) : (
-                <div className="space-y-3">
-                  {chatHistory
-                    .filter((msg) => msg.chat_id === currentChatId)
-                    .map((message, index) => (
-                      <div
-                        key={index}
-                        className="p-3 bg-slate-50 rounded-lg border border-slate-200"
-                      >
-                        <div className="flex justify-between items-start mb-2">
-                          <span className="text-xs font-medium text-slate-700">
-                            Message #{message.id}
-                          </span>
+              </div>
+            </div>
+
+            {/* Quick Queries */}
+            <QuickQueries onSelectQuery={handleQuickQuery} />
+          </div>
+        </div>
+      ) : (
+        /* MESSAGES VIEW - Input always at bottom */
+        <div className="flex-1 flex flex-col min-h-0">
+          {/* Messages Area - Scrollable */}
+          <div className="flex-1 overflow-y-auto px-6 py-4">
+            <div className="max-w-full mx-auto space-y-6">
+              {messages.map((message) => (
+                <div key={message.id} className="space-y-2">
+                  {message.type === "user" ? (
+                    <>
+                      <div className="flex justify-end">
+                        <div className="inline-block max-w-[80%] rounded-2xl px-5 py-3 bg-gray-900 text-white shadow-sm">
+                          <p className="text-md leading-relaxed whitespace-pre-wrap break-words">
+                            {message.content}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-end gap-3 px-2">
+                        <div className="flex items-center gap-1">
+                          <Clock className="w-3 h-3 text-slate-400 flex-shrink-0" />
                           <span className="text-xs text-slate-500">
                             {message.timestamp.toLocaleTimeString([], {
                               hour: "2-digit",
@@ -1868,474 +1477,190 @@ export function SalesDashboard() {
                             })}
                           </span>
                         </div>
-                        <p className="text-sm text-slate-800 mb-2">
-                          {message.query}
-                        </p>
-                        {message.files.length > 0 && (
-                          <div className="mb-2">
-                            <span className="text-xs text-slate-500">
-                              Files:
-                            </span>
-                            <div className="flex flex-wrap gap-1 mt-1">
-                              {message.files.map((file, i) => (
-                                <span
-                                  key={i}
-                                  className="px-2 py-0.5 bg-white text-xs rounded border border-slate-200"
-                                >
-                                  {file}
-                                </span>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                        {message.response && (
-                          <div className="mt-2 pt-2 border-t border-slate-200">
-                            <span className="text-xs text-green-600 font-medium">
-                              ✓ Generated {message.response.kpis.length} KPIs
-                            </span>
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                </div>
-              )}
-            </div>
-
-            <div className="p-3 border-t bg-slate-50">
-              <button
-                onClick={() => startNewChat()}
-                className="w-full py-2 px-4 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition-colors"
-              >
-                Start New Chat Session
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Query Input with Upload Button */}
-      <div className="max-w-7xl mx-auto mb-6 space-y-3">
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept=".xlsx,.xls,.csv,.json"
-          onChange={handleFileUpload}
-          className="hidden"
-          multiple
-        />
-
-        {/* Query Input Form */}
-        <div className="flex gap-2">
-          <div className="flex-1 relative">
-            <div className="bg-white border-2 border-slate-200 focus-within:border-indigo-500 rounded-md overflow-hidden">
-              <textarea
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Ask for a dashboard based on your uploaded data (e.g., 'Plot a sales Dashboard')"
-                className="w-full text-base h-32 px-4 py-3 outline-none resize-none"
-                disabled={loading}
-                onKeyPress={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    handleSendQuery();
-                  }
-                }}
-              />
-
-              {/* Selected files display inside chat bubble */}
-              {selectedFiles.length > 0 && (
-                <div className="px-4 py-2 border-t border-slate-100 bg-slate-50">
-                  <div className="flex items-center gap-2 mb-1">
-                    <File className="w-3 h-3 text-slate-500" />
-                    <span className="text-xs text-slate-500">
-                      Selected files:
-                    </span>
-                  </div>
-                  <div className="flex flex-wrap gap-1">
-                    {selectedFiles.map((file) => (
-                      <div
-                        key={file}
-                        className="flex items-center gap-1 bg-white px-2 py-1 rounded border border-slate-200"
-                      >
-                        <File className="w-3 h-3 text-slate-500" />
-                        <span className="text-xs text-slate-700 truncate max-w-[80px]">
-                          {file}
-                        </span>
-                        <button
-                          onClick={() => toggleFileSelection(file)}
-                          className="text-slate-400 hover:text-red-500"
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 hover:bg-gray-800"
+                          onClick={() => copyToClipboard(message.content, message.id)}
+                          title="Copy message"
                         >
-                          <X className="w-3 h-3" />
-                        </button>
+                          {copiedMessageId === message.id ? (
+                            <Check className="h-3 w-3 text-white" />
+                          ) : (
+                            <Copy className="h-3 w-3 text-gray-300" />
+                          )}
+                        </Button>
                       </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              <div className="px-4 py-2 border-t border-slate-100 flex items-center justify-between">
-                {/* Plus button for file selection */}
-                <button
-                  onClick={() => setShowFileDialog(true)}
-                  className="p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-md transition-colors flex items-center gap-2"
-                  title="Select files"
-                >
-                  <Plus className="w-5 h-5" />
-                  <span className="text-sm">Select Files</span>
-                </button>
-
-                <div className="flex items-center gap-2">
-                  {/* Send button inside chat bubble */}
-                  <button
-                    onClick={handleSendQuery}
-                    disabled={
-                      !query.trim() || selectedFiles.length === 0 || loading
-                    }
-                    className={`p-2 rounded-full transition-colors ${
-                      query.trim() && selectedFiles.length > 0 && !loading
-                        ? "bg-indigo-600 text-white hover:bg-indigo-700"
-                        : "bg-gray-100 text-gray-400 cursor-not-allowed"
-                    }`}
-                  >
-                    <Send className="w-5 h-5" />
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Quick Query Buttons */}
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-sm text-slate-600 flex items-center gap-1">
-            <Globe className="w-4 h-4" />
-            Quick queries:
-          </span>
-          {[
-            "Plot a sales Dashboard",
-            "Show me product performance",
-            "Analyze branch sales",
-          ].map((q, index) => (
-            <Button
-              key={index}
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                setQuery(q);
-                const fileNames = getFileNames();
-                if (fileNames) {
-                  // Remove .csv extension before sending for quick queries too
-                  const cleanFileNames = selectedFiles
-                    .map((file) => file.replace(/\.csv$/i, ""))
-                    .join(",");
-                  fetchDashboardData(q, cleanFileNames);
-                }
-              }}
-              disabled={loading}
-              className="text-sm border-slate-300 hover:border-indigo-400 hover:bg-indigo-50"
-            >
-              {q}
-            </Button>
-          ))}
-        </div>
-      </div>
-
-      {/* Dashboard Card */}
-      <Card
-        ref={cardRef}
-        className="w-full max-w-7xl mx-auto shadow-2xl bg-white overflow-hidden"
-      >
-        <CardHeader className="border-b bg-white px-6 py-4">
-          <div className="flex justify-between items-center">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-indigo-600 shadow-lg">
-                <LayoutDashboard className="w-5 h-5 text-white" />
-              </div>
-              <div>
-                <CardTitle className="text-xl font-bold text-slate-800">
-                  AI-Generated Dashboard
-                </CardTitle>
-                <p className="text-sm text-slate-600">
-                  Interactive analytics dashboard generated from your query
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <Badge className="bg-indigo-100 text-indigo-800 border-indigo-300">
-                <Calendar className="w-3 h-3 mr-1" />
-                {new Date().toLocaleDateString("en-US", {
-                  month: "short",
-                  year: "numeric",
-                })}
-              </Badge>
-
-              <div className="relative">
-                <Button
-                  onClick={() => setShowDownloadMenu(!showDownloadMenu)}
-                  disabled={isExporting}
-                  className="bg-indigo-600 hover:bg-indigo-700 text-white shadow-md"
-                >
-                  {isExporting ? (
-                    <>
-                      <Download className="w-4 h-4 mr-2 animate-bounce" />
-                      Exporting...
                     </>
                   ) : (
-                    <>
-                      <Download className="w-4 h-4 mr-2" />
-                      Export
-                    </>
-                  )}
-                </Button>
-
-                {showDownloadMenu && (
-                  <>
-                    <div
-                      className="fixed inset-0 z-50 bg-black/10"
-                      onClick={() => setShowDownloadMenu(false)}
-                    />
-                    <div className="fixed right-4 top-20 w-80 bg-white rounded-2xl shadow-2xl border z-[60]">
-                      <div className="p-4 border-b bg-slate-50">
-                        <div className="text-base font-semibold text-slate-800">
-                          Export Dashboard
-                        </div>
-                        <div className="text-sm text-slate-500 mt-1">
-                          Choose your export format
-                        </div>
+                    <div className="space-y-2">
+                      <div className="w-full rounded-2xl px-5 py-3 bg-gray-100 text-gray-900 shadow-sm">
+                        <p className="text-md">{message.content}</p>
+                        
+                        {message.visualRendered && message.dashboardData && (
+                          <div className="mt-4 w-full">
+                            <DashboardCard 
+                              dashboardData={message.dashboardData}
+                              timestamp={message.timestamp}
+                              showLoader={false}
+                            />
+                          </div>
+                        )}
                       </div>
 
-                      <div className="p-3">
-                        <button
-                          onClick={() => handleDownload("excel")}
-                          className="flex items-center w-full px-4 py-3.5 hover:bg-green-50 rounded-xl group mb-2"
-                        >
-                          <div className="p-2.5 bg-green-100 rounded-xl mr-4 group-hover:bg-green-200">
-                            <FileSpreadsheet className="w-5 h-5 text-green-600" />
-                          </div>
-                          <div className="flex-1 text-left">
-                            <div className="font-semibold text-slate-800">
-                              Export as Excel
-                            </div>
-                            <div className="text-xs text-slate-500 mt-0.5">
-                              Complete data in spreadsheet
-                            </div>
-                          </div>
-                        </button>
-
-                        <button
-                          onClick={() => handleDownload("html")}
-                          className="flex items-center w-full px-4 py-3.5 hover:bg-orange-50 rounded-xl group mb-2"
-                        >
-                          <div className="p-2.5 bg-orange-100 rounded-xl mr-4 group-hover:bg-orange-200">
-                            <Globe className="w-5 h-5 text-orange-600" />
-                          </div>
-                          <div className="flex-1 text-left">
-                            <div className="font-semibold text-slate-800">
-                              Export as HTML
-                            </div>
-                            <div className="text-xs text-slate-500 mt-0.5">
-                              Standalone web page
-                            </div>
-                          </div>
-                        </button>
-
-                        <button
-                          onClick={() => handleDownload("jpeg")}
-                          className="flex items-center w-full px-4 py-3.5 hover:bg-blue-50 rounded-xl group mb-2"
-                        >
-                          <div className="p-2.5 bg-blue-100 rounded-xl mr-4 group-hover:bg-blue-200">
-                            <Download className="w-5 h-5 text-blue-600" />
-                          </div>
-                          <div className="flex-1 text-left">
-                            <div className="font-semibold text-slate-800">
-                              Download as JPEG
-                            </div>
-                            <div className="text-xs text-slate-500 mt-0.5">
-                              Compressed format
-                            </div>
-                          </div>
-                        </button>
-
-                        <button
-                          onClick={() => handleDownload("png")}
-                          className="flex items-center w-full px-4 py-3.5 hover:bg-purple-50 rounded-xl group mb-2"
-                        >
-                          <div className="p-2.5 bg-purple-100 rounded-xl mr-4 group-hover:bg-purple-200">
-                            <Download className="w-5 h-5 text-purple-600" />
-                          </div>
-                          <div className="flex-1 text-left">
-                            <div className="font-semibold text-slate-800">
-                              Download as PNG
-                            </div>
-                            <div className="text-xs text-slate-500 mt-0.5">
-                              High quality
-                            </div>
-                          </div>
-                        </button>
-
-                        <button
-                          onClick={() => handleDownload("pdf")}
-                          className="flex items-center w-full px-4 py-3.5 hover:bg-red-50 rounded-xl group mb-2"
-                        >
-                          <div className="p-2.5 bg-red-100 rounded-xl mr-4 group-hover:bg-red-200">
-                            <FileText className="w-5 h-5 text-red-600" />
-                          </div>
-                          <div className="flex-1 text-left">
-                            <div className="font-semibold text-slate-800">
-                              Download as PDF
-                            </div>
-                            <div className="text-xs text-slate-500 mt-0.5">
-                              Professional document
-                            </div>
-                          </div>
-                        </button>
-
-                        <div className="h-px bg-slate-200 my-3"></div>
-
-                        <button
-                          onClick={() => handleDownload("print")}
-                          className="flex items-center w-full px-4 py-3.5 hover:bg-gray-50 rounded-xl group"
-                        >
-                          <div className="p-2.5 bg-gray-100 rounded-xl mr-4 group-hover:bg-gray-200">
-                            <Printer className="w-5 h-5 text-gray-700" />
-                          </div>
-                          <div className="flex-1 text-left">
-                            <div className="font-semibold text-slate-800">
-                              Print
-                            </div>
-                            <div className="text-xs text-slate-500 mt-0.5">
-                              Send to printer
-                            </div>
-                          </div>
-                        </button>
-                      </div>
-
-                      <div className="px-4 py-3 border-t bg-slate-50">
-                        <div className="flex items-center justify-between text-xs text-slate-500">
-                          <span>
-                            Generated {new Date().toLocaleDateString()}
+                      <div className="flex items-center gap-3 px-2">
+                        <div className="flex items-center gap-1">
+                          <Clock className="w-3 h-3 text-slate-400 flex-shrink-0" />
+                          <span className="text-xs text-slate-500">
+                            {message.timestamp.toLocaleTimeString([], {
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })}
                           </span>
-                          <button
-                            onClick={() => setShowDownloadMenu(false)}
-                            className="text-indigo-600 hover:text-indigo-700 font-semibold"
-                          >
-                            Close
-                          </button>
                         </div>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 hover:bg-gray-200"
+                          onClick={() => copyToClipboard(message.content, message.id)}
+                          title="Copy message"
+                        >
+                          {copiedMessageId === message.id ? (
+                            <Check className="h-3 w-3 text-green-600" />
+                          ) : (
+                            <Copy className="h-3 w-3 text-gray-500" />
+                          )}
+                        </Button>
                       </div>
                     </div>
-                  </>
-                )}
+                  )}
+                </div>
+              ))}
+
+              {/* Loading Indicator */}
+              {isLoading && !hasData && (
+                <div className="space-y-2">
+                  <div className="inline-block rounded-2xl px-5 py-3">
+                    <div className="flex items-center gap-2 italic text-gray-600">
+                      <div className="text-emerald-400">
+                        <Brain className="w-5 h-5" />
+                      </div>
+                      <RotatingTextLoader />
+                    </div>
+                  </div>
+                </div>
+              )}
+              <div ref={messagesEndRef} />
+            </div>
+          </div>
+
+          {/* Input Area - Fixed at bottom */}
+          <div className="bg-transparent sticky bottom-0 mt-auto">
+            <div className="w-full mx-auto px-6 py-3 backdrop-blur-sm">
+              <div className="backdrop-blur-xl bg-white/70 border border-white/20 rounded-2xl shadow-2xl overflow-hidden max-w-3xl mx-auto">
+                <div className="p-4 pb-0 relative">
+                  <textarea
+                    ref={inputRef}
+                    placeholder="Ask me anything..."
+                    value={inputValue}
+                    onChange={(e) => setInputValue(e.target.value)}
+                    onKeyPress={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey) {
+                        e.preventDefault();
+                        handleSendMessage();
+                      }
+                    }}
+                    className="w-full text-gray-700 bg-transparent text-base outline-none placeholder:text-gray-400 pr-20 resize-none"
+                    rows={2}
+                  />
+                </div>
+
+                <div className="px-4 py-3 flex items-center gap-3 border-t border-white/30">
+                  <button
+                    onClick={() => setShowFileDialog(true)}
+                    className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100/50 rounded-lg transition-colors flex-shrink-0"
+                    title="Attach files"
+                  >
+                    <Plus className="w-5 h-5" />
+                  </button>
+
+                  {selectedFiles.length > 0 && (
+                    <div className="flex items-center gap-2 flex-wrap flex-1 min-w-0">
+                      {selectedFiles.map((fileId) => {
+                        const file = availableFiles.find((f) => f.id === fileId);
+                        return (
+                          <div
+                            key={fileId}
+                            className="flex items-center gap-2 bg-gray-50/70 py-1 px-2 rounded-md border border-gray-200/50 flex-shrink-0"
+                          >
+                            <span className="text-md">{file?.icon}</span>
+                            <span className="text-xs text-gray-700 whitespace-nowrap">
+                              {file?.name}
+                            </span>
+                            <button
+                              onClick={() => toggleFileSelection(fileId)}
+                              className="text-gray-400 hover:text-gray-600"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {selectedFiles.length === 0 && <div className="flex-1" />}
+
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <button
+                      onClick={toggleSpeechRecognition}
+                      className={`p-2 rounded-lg transition-colors ${
+                        isListening
+                          ? "bg-red-100 text-red-600 hover:bg-red-200"
+                          : "text-gray-500 hover:text-gray-700 hover:bg-gray-100/50"
+                      }`}
+                      title={isListening ? "Stop listening" : "Start voice input"}
+                    >
+                      <Mic className="w-5 h-5" />
+                    </button>
+                    {!isLoading && lastQuery && (
+                      <button
+                        onClick={handleRetry}
+                        className="flex items-center gap-1.5 px-3 py-2 text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors"
+                        title="Retry last query"
+                      >
+                        <RotateCcw className="w-4 h-4" />
+                        <span className="text-sm font-medium">Retry</span>
+                      </button>
+                    )}
+                    {isLoading ? (
+                      <button
+                        onClick={handleStopRequest}
+                        className="w-8 h-8 flex items-center justify-center rounded-full bg-red-600 text-white hover:bg-red-700 transition-colors"
+                        title="Stop generation"
+                      >
+                        <CircleStop className="w-4 h-4" />
+                      </button>
+                    ) : (
+                      <button
+                        onClick={handleSendMessage}
+                        disabled={!inputValue.trim()}
+                        className={`w-8 h-8 flex items-center justify-center rounded-full transition-colors ${
+                          inputValue.trim()
+                            ? "bg-blue-600 text-white hover:bg-blue-700"
+                            : "bg-gray-100/70 text-gray-400 cursor-not-allowed"
+                        }`}
+                      >
+                        <ArrowUp className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
           </div>
-        </CardHeader>
-
-        <CardContent className="p-6">
-          {loading ? (
-            <div className="min-h-[600px] flex items-center justify-center">
-              <SequentialLoader />
-            </div>
-          ) : (
-            <div className="space-y-8">
-              {/* SECTION 1: KPI Cards - Header Hardcoded, Content Dynamic */}
-              {dashboardData.kpis && dashboardData.kpis.length > 0 && (
-                <div>
-                  {/* HARDCODED SECTION HEADER */}
-                  <h3 className="text-lg font-semibold text-slate-800 mb-4 flex items-center gap-2">
-                    <TrendingUp className="w-5 h-5 text-green-600" />
-                    Key Performance Indicators
-                  </h3>
-
-                  {/* DYNAMIC CONTENT FROM BACKEND */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                    {dashboardData.kpis.map((kpi, index) =>
-                      renderKPICard(kpi, index),
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* SECTION 2: Charts - Header Hardcoded, Content Dynamic */}
-              {dashboardData.charts && dashboardData.charts.length > 0 && (
-                <div>
-                  {/* HARDCODED SECTION HEADER */}
-                  <h3 className="text-lg font-semibold text-slate-800 mb-4 flex items-center gap-2">
-                    <BarChart className="w-5 h-5 text-indigo-600" />
-                    Visualizations
-                  </h3>
-
-                  {/* DYNAMIC CONTENT FROM BACKEND */}
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap=6">
-                    {dashboardData.charts.map((chart, index) =>
-                      renderChart(chart, index),
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* SECTION 3: Key Insights - Header Hardcoded, Content Dynamic */}
-              <div>
-                {/* HARDCODED SECTION HEADER */}
-                <h3 className="text-lg font-semibold text-slate-800 mb-4 flex items-center gap-2">
-                  <FileText className="w-5 h-5 text-orange-600" />
-                  Key Insights
-                </h3>
-
-                {/* DYNAMIC CONTENT FROM BACKEND */}
-                <Card className="shadow-sm">
-                  <CardContent className="p-6 space-y-4">
-                    {dashboardData.kpis && dashboardData.kpis.length > 0 ? (
-                      dashboardData.kpis.slice(0, 3).map((kpi, index) => (
-                        <div
-                          key={index}
-                          className="flex items-center space-x-3"
-                        >
-                          <Badge
-                            variant={
-                              index === 0
-                                ? "default"
-                                : index === 1
-                                  ? "outline"
-                                  : "secondary"
-                            }
-                          >
-                            {index === 0
-                              ? "Top"
-                              : index === 1
-                                ? "Important"
-                                : "Notable"}
-                          </Badge>
-                          <span className="text-sm">
-                            <strong>{kpi.title}:</strong> {kpi.value} -{" "}
-                            {kpi.description}
-                          </span>
-                        </div>
-                      ))
-                    ) : (
-                      <p className="text-sm text-slate-500">
-                        No insights available
-                      </p>
-                    )}
-
-                    {dashboardData.charts &&
-                      dashboardData.charts.length > 0 && (
-                        <div className="flex items-center space-x-3 pt-2 border-t">
-                          <Badge variant="destructive">Charts</Badge>
-                          <span className="text-sm">
-                            Dashboard contains {dashboardData.charts.length}{" "}
-                            interactive charts with detailed analytics
-                          </span>
-                        </div>
-                      )}
-                  </CardContent>
-                </Card>
-              </div>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+        </div>
+      )}
 
       {/* File Selection Dialog */}
       {showFileDialog && (
@@ -2345,18 +1670,13 @@ export function SalesDashboard() {
             onClick={() => setShowFileDialog(false)}
           />
           <div className="fixed left-1/2 top-1/2 transform -translate-x-1/2 -translate-y-1/2 w-full max-w-4xl h-[80vh] bg-white rounded-lg shadow-xl z-50 flex flex-col">
-            <div className="p-6 border-b flex-shrink-0">
+            <div className="p-6 border-b">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <Database className="w-6 h-6 text-indigo-600" />
-                  <div>
-                    <h3 className="text-lg font-semibold text-slate-800">
-                      Select Data Sources
-                    </h3>
-                    <p className="text-sm text-slate-500">
-                      Choose the data sources you want to analyze
-                    </p>
-                  </div>
+                  <Database className="w-6 h-6 text-slate-600" />
+                  <h3 className="text-lg font-semibold text-slate-800">
+                    Select Data Sources
+                  </h3>
                 </div>
                 <button
                   onClick={() => setShowFileDialog(false)}
@@ -2368,100 +1688,52 @@ export function SalesDashboard() {
             </div>
 
             <div className="flex-1 flex gap-6 p-6 overflow-hidden">
-              {/* Left side - Available files */}
-              <div className="flex-1 flex flex-col border border-slate-200 rounded-lg bg-white">
+              {/* Left Panel - Available Files */}
+              <div className="flex-1 flex flex-col border border-slate-200 rounded-lg">
                 <div className="p-4 border-b">
-                  <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center justify-between">
                     <h4 className="font-semibold text-slate-800">
                       Available Files
                     </h4>
                     <Badge variant="secondary">
-                      {uploadedFiles.length} available
+                      {availableFiles.filter(f => !selectedFiles.includes(f.id)).length} available
                     </Badge>
                   </div>
-                  <p className="text-sm text-slate-500">
-                    Select files from your uploaded data
-                  </p>
                 </div>
 
-                <div className="flex-1 overflow-auto p-4">
-                  {uploadedFiles.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center h-full py-12">
-                      <File className="w-12 h-12 text-slate-300 mb-3" />
-                      <p className="text-base text-slate-500 font-medium">
-                        No files available
-                      </p>
-                      <p className="text-sm text-slate-400 mt-1">
-                        Upload files to start analyzing data
-                      </p>
-                    </div>
-                  ) : (
-                    <div className="space-y-2">
-                      {uploadedFiles.map((file) => (
+                <ScrollArea className="flex-1 p-4">
+                  <div className="space-y-2">
+                    {availableFiles
+                      .filter((file) => !selectedFiles.includes(file.id))
+                      .map((file) => (
                         <div
-                          key={file.name}
-                          className="flex items-center justify-between p-3 bg-slate-50 hover:bg-slate-100 rounded-lg border border-slate-200 transition-colors"
+                          key={file.id}
+                          className="flex items-center justify-between p-3 bg-white rounded-lg border border-slate-200 hover:border-slate-300 transition-all group"
                         >
                           <div className="flex items-center gap-3 flex-1 min-w-0">
-                            <div className="p-2 rounded-md bg-indigo-100">
-                              <File className="w-4 h-4 text-indigo-600" />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm font-medium text-slate-800 truncate">
-                                {file.name}
-                              </p>
-                              <div className="flex items-center gap-2 mt-1">
-                                <span className="text-xs text-slate-500">
-                                  {formatFileSize(file.size)}
-                                </span>
-                                <span className="text-xs text-slate-400">
-                                  •
-                                </span>
-                                <span className="text-xs text-slate-500">
-                                  {file.uploadedAt.toLocaleDateString()}
-                                </span>
-                                {file.isExisting && (
-                                  <span className="text-xs bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded">
-                                    Existing
-                                  </span>
-                                )}
-                              </div>
-                            </div>
+                            <span className="text-lg">{file.icon}</span>
+                            <span className="text-sm text-slate-700 font-medium truncate">
+                              {file.name}
+                            </span>
                           </div>
-                          <div className="flex items-center gap-1">
+                          <div className="flex gap-1">
                             <button
-                              onClick={() => toggleFileSelection(file.name)}
-                              className={`p-1.5 rounded-md transition-colors ${
-                                selectedFiles.includes(file.name)
-                                  ? "bg-indigo-100 text-indigo-600 hover:bg-indigo-200"
-                                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                              }`}
-                              title={
-                                selectedFiles.includes(file.name)
-                                  ? "Remove from selection"
-                                  : "Add to selection"
-                              }
+                              onClick={() => toggleFileSelection(file.id)}
+                              className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded"
                             >
-                              {selectedFiles.includes(file.name) ? (
-                                <X className="w-4 h-4" />
-                              ) : (
-                                <Plus className="w-4 h-4" />
-                              )}
+                              <Plus className="w-4 h-4" />
                             </button>
                             <button
-                              onClick={() => handleDeleteFile(file.name)}
-                              disabled={deleteLoading}
-                              className="p-1.5 text-red-600 hover:bg-red-100 rounded-md transition-colors"
-                              title="Delete file"
+                              onClick={() => handleDeleteFile(file.id)}
+                              className="p-1.5 text-red-600 hover:bg-red-50 rounded"
                             >
                               <Trash2 className="w-4 h-4" />
                             </button>
                           </div>
                         </div>
                       ))}
-                    </div>
-                  )}
-                </div>
+                  </div>
+                </ScrollArea>
 
                 <div className="p-4 border-t">
                   <button
@@ -2469,81 +1741,66 @@ export function SalesDashboard() {
                       setShowFileDialog(false);
                       setShowFileUploadModal(true);
                     }}
-                    className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 rounded-lg transition-colors"
+                    className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 rounded-lg"
                   >
                     <Upload className="w-5 h-5" />
-                    <span className="font-medium">Upload New File</span>
+                    <span>Upload New File</span>
                   </button>
                 </div>
               </div>
 
-              {/* Right side - Selected files */}
-              <div className="flex-1 flex flex-col border border-slate-200 rounded-lg bg-white">
+              {/* Right Panel - Selected Files */}
+              <div className="flex-1 flex flex-col border border-slate-200 rounded-lg">
                 <div className="p-4 border-b">
-                  <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center justify-between">
                     <h4 className="font-semibold text-slate-800">
                       Selected Files
                     </h4>
-                    {selectedFiles.length > 0 && (
+                    <div className="flex items-center gap-2">
                       <Badge variant="secondary">
                         {selectedFiles.length} selected
                       </Badge>
-                    )}
+                      {selectedFiles.length > 0 && (
+                        <button
+                          onClick={() => setSelectedFiles([])}
+                          className="text-xs text-slate-500 hover:text-red-600 font-medium px-2 py-1 rounded-md hover:bg-red-50"
+                        >
+                          Clear all
+                        </button>
+                      )}
+                    </div>
                   </div>
-                  <p className="text-sm text-slate-500">
-                    Files that will be used for analysis
-                  </p>
                 </div>
 
-                <div className="flex-1 overflow-auto p-4">
+                <ScrollArea className="flex-1 p-4">
                   {selectedFiles.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center h-full py-12">
-                      <File className="w-12 h-12 text-slate-300 mb-3" />
+                    <div className="flex flex-col items-center justify-center h-full text-center">
+                      <Database className="w-16 h-16 text-slate-300 mb-3" />
                       <p className="text-base text-slate-500 font-medium">
                         No files selected
                       </p>
                       <p className="text-sm text-slate-400 mt-1">
-                        Select files from the left panel
+                        Choose from available files on the left
                       </p>
                     </div>
                   ) : (
                     <div className="space-y-2">
-                      {selectedFiles.map((fileName) => {
-                        const file = uploadedFiles.find(
-                          (f) => f.name === fileName,
-                        );
+                      {selectedFiles.map((fileId) => {
+                        const file = availableFiles.find((f) => f.id === fileId);
                         return (
                           <div
-                            key={fileName}
-                            className="flex items-center justify-between p-3 bg-indigo-50 hover:bg-indigo-100 rounded-lg border border-indigo-200 transition-colors"
+                            key={fileId}
+                            className="flex items-center justify-between p-3 bg-indigo-50 rounded-lg border border-indigo-200"
                           >
                             <div className="flex items-center gap-3 flex-1 min-w-0">
-                              <div className="p-2 rounded-md bg-indigo-100">
-                                <File className="w-4 h-4 text-indigo-600" />
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <p className="text-sm font-medium text-slate-800 truncate">
-                                  {fileName}
-                                </p>
-                                {file && (
-                                  <div className="flex items-center gap-2 mt-1">
-                                    <span className="text-xs text-slate-500">
-                                      {formatFileSize(file.size)}
-                                    </span>
-                                    <span className="text-xs text-slate-400">
-                                      •
-                                    </span>
-                                    <span className="text-xs text-slate-500">
-                                      {file.uploadedAt.toLocaleDateString()}
-                                    </span>
-                                  </div>
-                                )}
-                              </div>
+                              <span className="text-lg">{file?.icon}</span>
+                              <span className="text-sm text-indigo-700 font-medium truncate">
+                                {file?.name}
+                              </span>
                             </div>
                             <button
-                              onClick={() => toggleFileSelection(fileName)}
-                              className="p-1.5 text-red-600 hover:bg-red-100 rounded-md transition-colors"
-                              title="Remove file"
+                              onClick={() => toggleFileSelection(fileId)}
+                              className="p-1.5 text-slate-400 hover:text-red-500"
                             >
                               <X className="w-4 h-4" />
                             </button>
@@ -2552,22 +1809,11 @@ export function SalesDashboard() {
                       })}
                     </div>
                   )}
-                </div>
-
-                <div className="p-4 border-t">
-                  {selectedFiles.length > 0 && (
-                    <button
-                      onClick={() => setSelectedFiles([])}
-                      className="w-full px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg border border-red-200 transition-colors"
-                    >
-                      Clear All Selections
-                    </button>
-                  )}
-                </div>
+                </ScrollArea>
               </div>
             </div>
 
-            <div className="p-6 border-t flex-shrink-0 flex justify-end gap-3">
+            <div className="p-6 border-t flex justify-end gap-3">
               <Button
                 variant="outline"
                 onClick={() => setShowFileDialog(false)}
@@ -2576,7 +1822,7 @@ export function SalesDashboard() {
               </Button>
               <Button
                 onClick={() => setShowFileDialog(false)}
-                className="bg-indigo-600 hover:bg-indigo-700"
+                className="bg-blue-600 hover:bg-blue-700"
               >
                 Done
               </Button>
@@ -2592,84 +1838,60 @@ export function SalesDashboard() {
             className="fixed inset-0 bg-black/50 z-50"
             onClick={() => setShowFileUploadModal(false)}
           />
-          <div className="fixed left-1/2 top-1/2 transform -translate-x-1/2 -translate-y-1/2 w-full max-w-lg bg-white rounded-lg shadow-xl z-50">
-            <div className="p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-slate-800">
-                  Upload New File
-                </h3>
-                <button
-                  onClick={() => setShowFileUploadModal(false)}
-                  className="p-1 hover:bg-slate-100 rounded-md"
-                >
-                  <X className="w-5 h-5 text-slate-500" />
-                </button>
+          <div className="fixed left-1/2 top-1/2 transform -translate-x-1/2 -translate-y-1/2 w-full max-w-lg bg-white rounded-lg shadow-xl z-50 p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-slate-800">
+                Upload New File
+              </h3>
+              <button
+                onClick={() => setShowFileUploadModal(false)}
+                className="p-1 hover:bg-slate-100 rounded-md"
+              >
+                <X className="w-5 h-5 text-slate-500" />
+              </button>
+            </div>
+
+            {uploadSuccess && recentlyUploadedFile ? (
+              <div className="border-2 border-green-500 rounded-lg p-8 text-center bg-green-50">
+                <Check className="w-16 h-16 text-green-600 mx-auto mb-4" />
+                <h4 className="text-lg font-semibold text-green-700 mb-2">
+                  Upload Successful!
+                </h4>
+                <p className="text-green-600">{recentlyUploadedFile}</p>
               </div>
+            ) : (
+              <>
+                <div
+                  onClick={() => fileInputRef.current?.click()}
+                  className="border-2 border-dashed border-slate-300 rounded-lg p-8 text-center cursor-pointer hover:border-indigo-500"
+                >
+                  <Upload className="w-12 h-12 text-slate-400 mx-auto mb-4" />
+                  <p className="text-slate-600 font-medium">
+                    Click to upload files
+                  </p>
+                  <p className="text-sm text-slate-500">
+                    CSV, Excel, JSON
+                  </p>
+                </div>
 
-              <div className="space-y-4">
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept=".xlsx,.xls,.csv,.json"
-                  onChange={handleFileUpload}
-                  className="hidden"
-                  multiple
-                />
-
-                {/* Upload success message */}
-                {uploadSuccess && recentlyUploadedFile ? (
-                  <div className="border-2 border-green-500 rounded-lg p-8 text-center bg-green-50">
-                    <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-green-100 flex items-center justify-center">
-                      <Check className="w-8 h-8 text-green-600" />
-                    </div>
-                    <h4 className="text-lg font-semibold text-green-700 mb-2">
-                      Upload Successful!
-                    </h4>
-                    <p className="text-green-600 mb-1">
-                      File uploaded:{" "}
-                      <span className="font-medium">
-                        {recentlyUploadedFile}
-                      </span>
-                    </p>
-                    <p className="text-sm text-green-500">
-                      Returning to file selection in 3 seconds...
-                    </p>
+                {uploading && (
+                  <div className="flex items-center justify-center mt-4">
+                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-600"></div>
+                    <span className="ml-2 text-sm text-slate-600">
+                      Uploading...
+                    </span>
                   </div>
-                ) : (
-                  <>
-                    <div
-                      onClick={() => fileInputRef.current?.click()}
-                      className="border-2 border-dashed border-slate-300 rounded-lg p-8 text-center cursor-pointer hover:border-indigo-500 transition-colors"
-                    >
-                      <Upload className="w-12 h-12 text-slate-400 mx-auto mb-4" />
-                      <p className="text-slate-600 font-medium">
-                        Click to upload files
-                      </p>
-                      <p className="text-sm text-slate-500 mt-1">
-                        Supported formats: CSV, Excel, JSON
-                      </p>
-                    </div>
-
-                    {uploading && (
-                      <div className="flex items-center justify-center">
-                        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-600"></div>
-                        <span className="ml-2 text-sm text-slate-600">
-                          Uploading...
-                        </span>
-                      </div>
-                    )}
-                  </>
                 )}
-              </div>
+              </>
+            )}
 
-              <div className="flex justify-end gap-2 mt-6">
-                <Button
-                  variant="outline"
-                  onClick={() => setShowFileUploadModal(false)}
-                >
-                  Cancel
-                </Button>
-              </div>
+            <div className="flex justify-end gap-2 mt-6">
+              <Button
+                variant="outline"
+                onClick={() => setShowFileUploadModal(false)}
+              >
+                Cancel
+              </Button>
             </div>
           </div>
         </>

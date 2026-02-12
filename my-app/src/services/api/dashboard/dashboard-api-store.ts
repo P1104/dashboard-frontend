@@ -639,22 +639,22 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
           case "pending":
           case "processing":
             console.log("⏳ Task still processing:", taskStatus.status);
-            // Continue polling after 20 seconds
+            // Continue polling after 10 seconds
             setTimeout(() => {
               if (get().polling && get().currentTaskId === taskId) {
                 get().pollTaskStatus(taskId);
               }
-            }, 20000);
+            }, 10000);
             break;
 
           default:
             console.warn("⚠️ Unknown task status:", taskStatus.status);
-            // Continue polling after 20 seconds
+            // Continue polling after 10 seconds
             setTimeout(() => {
               if (get().polling && get().currentTaskId === taskId) {
                 get().pollTaskStatus(taskId);
               }
-            }, 20000);
+            }, 10000);
             break;
         }
       } catch (error) {

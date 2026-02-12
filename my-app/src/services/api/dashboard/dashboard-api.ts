@@ -581,22 +581,22 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
           case "pending":
           case "processing":
             console.log("⏳ Task still processing:", taskStatus.status);
-            // Continue polling after 20 seconds
+            // Continue polling after 10 seconds
             setTimeout(() => {
               if (get().polling && get().currentTaskId === taskId) {
                 get().pollTaskStatus(taskId);
               }
-            }, 20000);
+            }, 10000);
             break;
 
           default:
             console.warn("⚠️ Unknown task status:", taskStatus.status);
-            // Continue polling after 20 seconds
+            // Continue polling after 10 seconds
             setTimeout(() => {
               if (get().polling && get().currentTaskId === taskId) {
                 get().pollTaskStatus(taskId);
               }
-            }, 20000);
+            }, 10000);
             break;
         }
       } catch (error) {
@@ -680,7 +680,7 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
     currentFilesCache = [];
     
     toast.success("Started new chat session", {
-      duration: 2000,
+      duration: 1000,
       position: "top-center",
     });
   },
@@ -711,7 +711,7 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
       });
       
       toast.success(`Loaded chat #${chatId}`, {
-        duration: 2000,
+        duration: 1000,
         position: "top-center",
       });
     } else {
@@ -739,7 +739,7 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
       loading: false,
     });
     toast.info("Polling stopped", {
-      duration: 2000,
+      duration: 1000,
       position: "top-center",
     });
   },
