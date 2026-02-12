@@ -1,6 +1,6 @@
+/* eslint-disable jsx-a11y/alt-text */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable @typescript-eslint/no-unused-vars */
-/* eslint-disable react/no-unescaped-entities */
 /* eslint-disable react-hooks/exhaustive-deps */
 
 "use client";
@@ -183,12 +183,13 @@ const QuickQueries = ({ onSelectQuery }: { onSelectQuery: (query: string) => voi
   );
 };
 
-// ==================== CHART DOWNLOAD BUTTON ====================
+// ==================== CHART DOWNLOAD BUTTON (FIXED WHITE BACKGROUND) ====================
 
 const ChartDownloadButton = ({ chartOption, chartTitle }: { chartOption: any; chartTitle: string }) => {
   const [showMenu, setShowMenu] = useState(false);
   const chartRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const echartRef = useRef<any>(null);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -204,23 +205,36 @@ const ChartDownloadButton = ({ chartOption, chartTitle }: { chartOption: any; ch
     if (!chartRef.current) return;
 
     try {
-      const canvas = await htmlToImage.toCanvas(chartRef.current, {
-        scale: 2,
-        backgroundColor: '#ffffff'
-      });
+      let canvas;
+      
+      if (format === 'png' || format === 'jpg') {
+        if (echartRef.current && echartRef.current.getEchartsInstance) {
+          const instance = echartRef.current.getEchartsInstance();
+          canvas = instance.getRenderedCanvas({
+            backgroundColor: '#fff',
+            pixelRatio: 2,
+          });
+        } else {
+          canvas = await htmlToImage.toCanvas(chartRef.current, {
+            scale: 2,
+            backgroundColor: '#ffffff',
+            pixelRatio: 2,
+          });
+        }
 
-      if (format === 'png') {
-        const link = document.createElement('a');
-        link.download = `${chartTitle || 'chart'}.png`;
-        link.href = canvas.toDataURL('image/png');
-        link.click();
-        toast.success('Chart downloaded as PNG');
-      } else if (format === 'jpg') {
-        const link = document.createElement('a');
-        link.download = `${chartTitle || 'chart'}.jpg`;
-        link.href = canvas.toDataURL('image/jpeg', 0.9);
-        link.click();
-        toast.success('Chart downloaded as JPG');
+        if (format === 'png') {
+          const link = document.createElement('a');
+          link.download = `${chartTitle || 'chart'}.png`;
+          link.href = canvas.toDataURL('image/png');
+          link.click();
+          toast.success('Chart downloaded as PNG');
+        } else if (format === 'jpg') {
+          const link = document.createElement('a');
+          link.download = `${chartTitle || 'chart'}.jpg`;
+          link.href = canvas.toDataURL('image/jpeg', 0.95);
+          link.click();
+          toast.success('Chart downloaded as JPG');
+        }
       }
     } catch (error) {
       console.error('Failed to download chart:', error);
@@ -271,6 +285,7 @@ const ChartDownloadButton = ({ chartOption, chartTitle }: { chartOption: any; ch
       
       <div ref={chartRef} className="absolute -left-[9999px] top-0 w-[800px] h-[400px] bg-white p-4">
         <ReactECharts
+          ref={echartRef}
           option={chartOption}
           style={{ height: "100%", width: "100%" }}
           opts={{ renderer: "canvas" }}
@@ -280,7 +295,7 @@ const ChartDownloadButton = ({ chartOption, chartTitle }: { chartOption: any; ch
   );
 };
 
-// ==================== DASHBOARD CARD WITH EXPORT ====================
+// ==================== DASHBOARD CARD WITH EXPORT (UPDATED WITH MORE OPTIONS) ====================
 
 interface DashboardCardProps {
   dashboardData: any;
@@ -376,6 +391,122 @@ const DashboardCard = ({ dashboardData, timestamp, cardRef, showLoader }: Dashbo
     URL.revokeObjectURL(url);
   };
 
+  const exportToExcel = () => {
+    try {
+      const wb = XLSX.utils.book_new();
+      
+      if (dashboardData.kpis && dashboardData.kpis.length > 0) {
+        const kpiData = dashboardData.kpis.map((kpi: any) => ({
+          'Metric': kpi.title,
+          'Value': kpi.value,
+          'Description': kpi.description || ''
+        }));
+        const kpiWs = XLSX.utils.json_to_sheet(kpiData);
+        XLSX.utils.book_append_sheet(wb, kpiWs, 'KPIs');
+      }
+      
+      if (dashboardData.charts && dashboardData.charts.length > 0) {
+        const chartData: any[] = [];
+        dashboardData.charts.forEach((chart: any, idx: number) => {
+          const chartTitle = chart.title?.text || `Chart ${idx + 1}`;
+          
+          if (chart.series && chart.series.length > 0) {
+            chart.series.forEach((series: any) => {
+              if (series.data && Array.isArray(series.data)) {
+                series.data.forEach((item: any, dataIdx: number) => {
+                  chartData.push({
+                    'Chart': chartTitle,
+                    'Series': series.name || `Series ${dataIdx + 1}`,
+                    'Category': item.name || `Item ${dataIdx + 1}`,
+                    'Value': item.value || item
+                  });
+                });
+              }
+            });
+          }
+        });
+        
+        if (chartData.length > 0) {
+          const chartWs = XLSX.utils.json_to_sheet(chartData);
+          XLSX.utils.book_append_sheet(wb, chartWs, 'Chart Data');
+        }
+      }
+      
+      XLSX.writeFile(wb, `dashboard-${Date.now()}.xlsx`);
+      toast.success('Excel file downloaded successfully!');
+    } catch (error) {
+      console.error('Excel export failed:', error);
+      toast.error('Failed to export as Excel');
+    }
+  };
+
+  const exportToHTML = async () => {
+    if (!dashboardCardRef.current) return;
+    
+    try {
+      const dashboardHTML = dashboardCardRef.current.outerHTML;
+      const fullHTML = `
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Dashboard Export - ${new Date().toLocaleDateString()}</title>
+          <style>
+            body {
+              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+              padding: 20px;
+              background: white;
+              color: #1e293b;
+            }
+            .dashboard-container {
+              max-width: 1400px;
+              margin: 0 auto;
+            }
+            .kpi-grid {
+              display: grid;
+              grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+              gap: 16px;
+              margin-bottom: 24px;
+            }
+            .chart-grid {
+              display: grid;
+              grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+              gap: 20px;
+            }
+            .card {
+              border: 1px solid #e2e8f0;
+              border-radius: 8px;
+              padding: 16px;
+              background: white;
+              box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            }
+            .badge {
+              display: inline-block;
+              padding: 4px 8px;
+              border-radius: 9999px;
+              font-size: 12px;
+              font-weight: 500;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="dashboard-container">
+            ${dashboardHTML}
+          </div>
+        </body>
+        </html>
+      `;
+      
+      const blob = new Blob([fullHTML], { type: 'text/html' });
+      downloadFile(blob, `dashboard-${Date.now()}.html`);
+      toast.success('HTML file downloaded successfully!');
+    } catch (error) {
+      console.error('HTML export failed:', error);
+      toast.error('Failed to export as HTML');
+    }
+  };
+
   const handleDownload = async (format: string) => {
     if (!dashboardCardRef.current) return;
     
@@ -393,6 +524,16 @@ const DashboardCard = ({ dashboardData, timestamp, cardRef, showLoader }: Dashbo
         const blob = await (await fetch(image)).blob();
         downloadFile(blob, `dashboard-${Date.now()}.png`);
         toast.success('PNG downloaded successfully!');
+      } else if (format === 'jpg') {
+        const canvas = await htmlToImage.toCanvas(dashboardCardRef.current, {
+          scale: 2,
+          backgroundColor: '#ffffff',
+          pixelRatio: 2,
+        });
+        const image = canvas.toDataURL('image/jpeg', 0.95);
+        const blob = await (await fetch(image)).blob();
+        downloadFile(blob, `dashboard-${Date.now()}.jpg`);
+        toast.success('JPG downloaded successfully!');
       } else if (format === 'pdf') {
         const canvas = await htmlToImage.toCanvas(dashboardCardRef.current, {
           scale: 2,
@@ -408,6 +549,10 @@ const DashboardCard = ({ dashboardData, timestamp, cardRef, showLoader }: Dashbo
         pdf.addImage(image, 'PNG', 0, 0, canvas.width, canvas.height);
         pdf.save(`dashboard-${Date.now()}.pdf`);
         toast.success('PDF downloaded successfully!');
+      } else if (format === 'excel') {
+        exportToExcel();
+      } else if (format === 'html') {
+        await exportToHTML();
       } else if (format === 'print') {
         const canvas = await htmlToImage.toCanvas(dashboardCardRef.current, {
           scale: 2,
@@ -492,31 +637,77 @@ const DashboardCard = ({ dashboardData, timestamp, cardRef, showLoader }: Dashbo
                     className="fixed inset-0 z-40" 
                     onClick={() => setShowDownloadMenu(false)}
                   />
-                  <div className="absolute right-0 top-full mt-2 w-56 bg-white rounded-xl shadow-2xl border z-50 overflow-hidden">
+                  <div className="absolute right-0 top-full mt-2 w-64 bg-white rounded-xl shadow-2xl border z-50 overflow-hidden">
                     <div className="p-2">
+                      <div className="text-xs font-semibold text-slate-500 px-4 pt-2 pb-1">IMAGE</div>
                       <button
                         onClick={() => handleDownload('png')}
-                        className="flex items-center w-full px-4 py-3 hover:bg-blue-50 rounded-lg transition-colors"
+                        className="flex items-center w-full px-4 py-2.5 hover:bg-blue-50 rounded-lg transition-colors"
                       >
-                        <div className="p-2 bg-blue-100 rounded-lg mr-3">
+                        <div className="p-1.5 bg-blue-100 rounded-lg mr-3">
                           <Image className="w-4 h-4 text-blue-600" />
                         </div>
                         <div className="text-left">
-                          <div className="text-sm font-semibold text-slate-800">Download as PNG</div>
+                          <div className="text-sm font-medium text-slate-800">PNG</div>
                           <div className="text-xs text-slate-500">High quality image</div>
                         </div>
                       </button>
                       
                       <button
-                        onClick={() => handleDownload('pdf')}
-                        className="flex items-center w-full px-4 py-3 hover:bg-red-50 rounded-lg transition-colors"
+                        onClick={() => handleDownload('jpg')}
+                        className="flex items-center w-full px-4 py-2.5 hover:bg-blue-50 rounded-lg transition-colors"
                       >
-                        <div className="p-2 bg-red-100 rounded-lg mr-3">
+                        <div className="p-1.5 bg-blue-100 rounded-lg mr-3">
+                          <Image className="w-4 h-4 text-blue-600" />
+                        </div>
+                        <div className="text-left">
+                          <div className="text-sm font-medium text-slate-800">JPG</div>
+                          <div className="text-xs text-slate-500">Compressed image</div>
+                        </div>
+                      </button>
+                      
+                      <div className="h-px bg-slate-200 my-2"></div>
+                      
+                      <div className="text-xs font-semibold text-slate-500 px-4 pt-1 pb-1">DOCUMENT</div>
+                      <button
+                        onClick={() => handleDownload('pdf')}
+                        className="flex items-center w-full px-4 py-2.5 hover:bg-red-50 rounded-lg transition-colors"
+                      >
+                        <div className="p-1.5 bg-red-100 rounded-lg mr-3">
                           <FileText className="w-4 h-4 text-red-600" />
                         </div>
                         <div className="text-left">
-                          <div className="text-sm font-semibold text-slate-800">Download as PDF</div>
+                          <div className="text-sm font-medium text-slate-800">PDF</div>
                           <div className="text-xs text-slate-500">Professional document</div>
+                        </div>
+                      </button>
+                      
+                      <button
+                        onClick={() => handleDownload('html')}
+                        className="flex items-center w-full px-4 py-2.5 hover:bg-orange-50 rounded-lg transition-colors"
+                      >
+                        <div className="p-1.5 bg-orange-100 rounded-lg mr-3">
+                          <FileJson className="w-4 h-4 text-orange-600" />
+                        </div>
+                        <div className="text-left">
+                          <div className="text-sm font-medium text-slate-800">HTML</div>
+                          <div className="text-xs text-slate-500">Web page format</div>
+                        </div>
+                      </button>
+                      
+                      <div className="h-px bg-slate-200 my-2"></div>
+                      
+                      <div className="text-xs font-semibold text-slate-500 px-4 pt-1 pb-1">DATA</div>
+                      <button
+                        onClick={() => handleDownload('excel')}
+                        className="flex items-center w-full px-4 py-2.5 hover:bg-green-50 rounded-lg transition-colors"
+                      >
+                        <div className="p-1.5 bg-green-100 rounded-lg mr-3">
+                          <FileSpreadsheet className="w-4 h-4 text-green-600" />
+                        </div>
+                        <div className="text-left">
+                          <div className="text-sm font-medium text-slate-800">Excel</div>
+                          <div className="text-xs text-slate-500">Spreadsheet data</div>
                         </div>
                       </button>
                       
@@ -524,13 +715,13 @@ const DashboardCard = ({ dashboardData, timestamp, cardRef, showLoader }: Dashbo
                       
                       <button
                         onClick={() => handleDownload('print')}
-                        className="flex items-center w-full px-4 py-3 hover:bg-gray-50 rounded-lg transition-colors"
+                        className="flex items-center w-full px-4 py-2.5 hover:bg-gray-50 rounded-lg transition-colors"
                       >
-                        <div className="p-2 bg-gray-100 rounded-lg mr-3">
+                        <div className="p-1.5 bg-gray-100 rounded-lg mr-3">
                           <Printer className="w-4 h-4 text-gray-700" />
                         </div>
                         <div className="text-left">
-                          <div className="text-sm font-semibold text-slate-800">Print</div>
+                          <div className="text-sm font-medium text-slate-800">Print</div>
                           <div className="text-xs text-slate-500">Send to printer</div>
                         </div>
                       </button>
@@ -710,9 +901,7 @@ export function SalesDashboard() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
-  const toastShownRef = useRef<string | null>(null); // Fix for double toasts
-
-  // ==================== STATE ====================
+  const toastShownRef = useRef<string | null>(null);
 
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const [userEmail, setUserEmail] = useState<string>("");
@@ -727,15 +916,13 @@ export function SalesDashboard() {
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
   const recognitionRef = useRef<any>(null);
 
-  // Chat states
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState("");
   const [lastQuery, setLastQuery] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [pendingQuery, setPendingQuery] = useState<string | null>(null);
-  const [hasShownNoFileToast, setHasShownNoFileToast] = useState(false); // Fix for double toasts
+  const [hasShownNoFileToast, setHasShownNoFileToast] = useState(false);
 
-  // Stores
   const {
     loading,
     hasData,
@@ -748,8 +935,6 @@ export function SalesDashboard() {
   const { deleteFile } = useDeleteFileStore();
   const router = useRouter();
 
-  // ==================== EFFECTS ====================
-
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
@@ -760,7 +945,6 @@ export function SalesDashboard() {
     loadExistingFiles();
   }, []);
 
-  // ==================== FIX: Wait for dashboard data to be ready ====================
   useEffect(() => {
     if (hasData && dashboardData && isLoading && pendingQuery) {
       console.log("✅ Dashboard data is ready! Adding bot message with data:", dashboardData);
@@ -779,11 +963,10 @@ export function SalesDashboard() {
       setPendingQuery(null);
       setIsLoading(false);
       toast.success("Dashboard ready!");
-      toastShownRef.current = null; // Reset toast ref
+      toastShownRef.current = null;
     }
   }, [hasData, dashboardData, isLoading, pendingQuery]);
 
-  // Initialize Speech Recognition
   useEffect(() => {
     const SpeechRecognition =
       (window as any).SpeechRecognition ||
@@ -818,7 +1001,6 @@ export function SalesDashboard() {
     };
   }, []);
 
-  // Load available files in modal format
   useEffect(() => {
     async function loadDataSources() {
       try {
@@ -840,8 +1022,6 @@ export function SalesDashboard() {
     }
     loadDataSources();
   }, [uploadedFiles]);
-
-  // ==================== HELPER FUNCTIONS ====================
 
   const loadExistingFiles = async () => {
     try {
@@ -1002,14 +1182,12 @@ export function SalesDashboard() {
     }
   };
 
-  // FIX: Prevent double toast on delete
   const handleDeleteFile = async (filename: string) => {
     try {
       await deleteFile(filename);
       setUploadedFiles((prev) => prev.filter((file) => file.name !== filename));
       setAvailableFiles((prev) => prev.filter((file) => file.id !== filename));
       setSelectedFiles((prev) => prev.filter((file) => file !== filename));
-      // Only show one toast
       toast.success(`File "${filename}" deleted successfully!`);
     } catch (error: any) {
       console.error("Delete error:", error);
@@ -1032,7 +1210,6 @@ export function SalesDashboard() {
     return selectedFiles.join(",");
   };
 
-  // FIX: Quick query and retry should auto-send with proper file check
   const handleQuickQuery = (query: string) => {
     setInputValue(query);
     
@@ -1045,13 +1222,11 @@ export function SalesDashboard() {
       return;
     }
     
-    // Auto-send the query
     setTimeout(() => {
       handleSendMessageWithQuery(query);
     }, 100);
   };
 
-  // FIX: New function to handle sending with specific query
   const handleSendMessageWithQuery = async (queryText: string) => {
     if (!queryText.trim()) {
       toast.error("Please enter a query");
@@ -1108,7 +1283,6 @@ export function SalesDashboard() {
     }
   };
 
-  // FIX: Modified handleSendMessage to prevent double toasts
   const handleSendMessage = async () => {
     if (!inputValue.trim()) {
       toast.error("Please enter a query");
@@ -1165,7 +1339,6 @@ export function SalesDashboard() {
     }
   };
 
-  // FIX: Handle retry
   const handleRetry = async () => {
     if (!lastQuery) return;
     if (selectedFiles.length === 0) {
@@ -1195,13 +1368,10 @@ export function SalesDashboard() {
     });
   };
 
-  // ==================== RENDER ====================
-  
   return (
     <div className="h-full flex flex-col bg-white min-h-screen">
       <Toaster />
       
-      {/* Navigation Bar - Always visible */}
       <NavigationBar 
         userEmail={userEmail}
         showUserMenu={showUserMenu}
@@ -1219,11 +1389,9 @@ export function SalesDashboard() {
         multiple
       />
 
-      {/* INITIAL STATE - NO MESSAGES */}
       {messages.length === 0 ? (
         <div className="flex-1 flex flex-col items-center justify-center bg-white backdrop-blur-xl">
           <div className="w-full max-w-4xl mx-auto flex flex-col items-center px-6">
-            {/* Logo */}
             <div className="mb-8 w-20 h-20 relative">
               <svg
                 xmlns="http://www.w3.org/2000/svg"
@@ -1336,7 +1504,6 @@ export function SalesDashboard() {
               </svg>
             </div>
 
-            {/* Welcome Text */}
             <div className="mb-10 text-center">
               <motion.div
                 initial={{ opacity: 0, y: 10 }}
@@ -1353,7 +1520,6 @@ export function SalesDashboard() {
               </motion.div>
             </div>
 
-            {/* Input Area - Always at bottom in initial state via flex layout */}
             <div className="w-full bg-white/70 border border-white/20 rounded-2xl shadow-2xl overflow-hidden mb-4">
               <div className="p-4 pb-0 relative">
                 <textarea
@@ -1446,14 +1612,11 @@ export function SalesDashboard() {
               </div>
             </div>
 
-            {/* Quick Queries */}
             <QuickQueries onSelectQuery={handleQuickQuery} />
           </div>
         </div>
       ) : (
-        /* MESSAGES VIEW - Input always at bottom */
         <div className="flex-1 flex flex-col min-h-0">
-          {/* Messages Area - Scrollable */}
           <div className="flex-1 overflow-y-auto px-6 py-4">
             <div className="max-w-full mx-auto space-y-6">
               {messages.map((message) => (
@@ -1537,7 +1700,6 @@ export function SalesDashboard() {
                 </div>
               ))}
 
-              {/* Loading Indicator */}
               {isLoading && !hasData && (
                 <div className="space-y-2">
                   <div className="inline-block rounded-2xl px-5 py-3">
@@ -1554,7 +1716,6 @@ export function SalesDashboard() {
             </div>
           </div>
 
-          {/* Input Area - Fixed at bottom */}
           <div className="bg-transparent sticky bottom-0 mt-auto">
             <div className="w-full mx-auto px-6 py-3 backdrop-blur-sm">
               <div className="backdrop-blur-xl bg-white/70 border border-white/20 rounded-2xl shadow-2xl overflow-hidden max-w-3xl mx-auto">
@@ -1662,7 +1823,6 @@ export function SalesDashboard() {
         </div>
       )}
 
-      {/* File Selection Dialog */}
       {showFileDialog && (
         <>
           <div
@@ -1688,7 +1848,6 @@ export function SalesDashboard() {
             </div>
 
             <div className="flex-1 flex gap-6 p-6 overflow-hidden">
-              {/* Left Panel - Available Files */}
               <div className="flex-1 flex flex-col border border-slate-200 rounded-lg">
                 <div className="p-4 border-b">
                   <div className="flex items-center justify-between">
@@ -1749,7 +1908,6 @@ export function SalesDashboard() {
                 </div>
               </div>
 
-              {/* Right Panel - Selected Files */}
               <div className="flex-1 flex flex-col border border-slate-200 rounded-lg">
                 <div className="p-4 border-b">
                   <div className="flex items-center justify-between">
@@ -1831,7 +1989,6 @@ export function SalesDashboard() {
         </>
       )}
 
-      {/* File Upload Modal */}
       {showFileUploadModal && (
         <>
           <div
