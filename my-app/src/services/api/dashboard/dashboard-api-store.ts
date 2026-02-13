@@ -728,9 +728,10 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
       });
 
       return {
+        ...state,
         currentChatId: newChatId,
         currentMessageId: "0",
-        chatHistory: [],
+        
         hasData: false,
         dashboardData: INITIAL_DASHBOARD_DATA,
         loading: false,
