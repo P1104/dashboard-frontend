@@ -8,7 +8,7 @@ import { Button } from "../ui/button";
 import { ArrowLeft, Settings, Key, User, Shield, Bell, Globe,Wallet,ToggleLeft } from "lucide-react";
 import { useRouter } from "next/navigation";
 import Script from "next/script";
-import {url } from "@/src/services/api/api-url";
+import {url} from "@/src/services/api/api-url";
 import {
   Dialog,
   DialogContent,
@@ -64,7 +64,8 @@ const purchaseCredits = async () => {
 
   try {
     const orderResponse = await fetch(
-      `${url}/payment/create-order`,
+      `${url.backendUrl}/payment/create-order`,
+      
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -74,7 +75,7 @@ const purchaseCredits = async () => {
         }),
       }
     );
-
+console.log(url);
     const order = await orderResponse.json();
 
     const options = {
@@ -87,7 +88,8 @@ const purchaseCredits = async () => {
 
       handler: async function (response: any) {
         const verifyResponse = await fetch(
-          `${url}/payment/verify-payment`,
+          `${url.backendUrl}/payment/verify-payment`,
+          
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
