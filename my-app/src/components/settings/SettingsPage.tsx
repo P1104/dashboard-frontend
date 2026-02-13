@@ -5,31 +5,195 @@
 import React, { useEffect, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../ui/card";
 import { Button } from "../ui/button";
-import { ArrowLeft, Settings, Key, User, Shield, Bell, Globe } from "lucide-react";
+import { ArrowLeft, Settings, Key, User, Shield, Bell, Globe,Wallet,ToggleLeft } from "lucide-react";
 import { useRouter } from "next/navigation";
+import Script from "next/script";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "../ui/dialog";
+import { Input } from "../ui/input";
+import ReactECharts from "echarts-for-react";
+
+
+
+
 
 export function SettingsPage() {
   const router = useRouter();
+
   const [userEmail, setUserEmail] = useState<string>("");
-  const [totalTokens, setTotalTokens] = useState<number>(500);
-  const [remainingTokens, setRemainingTokens] = useState<number>(100);
+  const [userName, setUserName] = useState<string>("");
+  // const [totalTokens, setTotalTokens] = useState<number>(500);
+  // const [remainingTokens, setRemainingTokens] = useState<number>(100);
+const [credits, setCredits] = useState(1);
+const [availableCredits, setAvailableCredits] = useState(500);
+const [loading, setLoading] = useState(false);
+
+
+const [showAnalytics, setShowAnalytics] = useState(false);
+const [chartType, setChartType] = useState<"bar" | "line">("bar");
+
+const [selectedFile] = useState("sales_data_2026.csv");
+
+const [cleanOptions, setCleanOptions] = useState({
+  keepNulls: false,
+  removeDuplicates: false,
+  normalizeColumns: false,
+  trimWhitespace: false,
+});
 
   useEffect(() => {
     // Get user email from localStorage
     const email = localStorage.getItem("user_email") || "Not logged in";
     setUserEmail(email);
+    const name = localStorage.getItem("user_name") || "User";
+    setUserName(name);
     
     // TODO: Fetch token info from backend when available
     // For now, using hardcoded values
   }, []);
+const purchaseCredits = async () => {
+  if (credits < 1) return;
+
+  setLoading(true);
+
+  try {
+    const orderResponse = await fetch(
+      "http://34.236.149.114:8000/payment/create-order",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          credits,
+          user_id: "current_user_id",
+        }),
+      }
+    );
+
+    const order = await orderResponse.json();
+
+    const options = {
+      key: "rzp_test_SE0YAyn0Zv15Qy",
+      amount: order.amount,
+      currency: order.currency,
+      name: "ADRO",
+      description: `Purchase ${credits} credits`,
+      order_id: order.id,
+
+      handler: async function (response: any) {
+        const verifyResponse = await fetch(
+          "http://34.236.149.114:8000/payment/verify-payment",
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              razorpay_order_id: response.razorpay_order_id,
+              razorpay_payment_id: response.razorpay_payment_id,
+              razorpay_signature: response.razorpay_signature,
+            }),
+          }
+        );
+
+        const result = await verifyResponse.json();
+
+        if (result.status === "success") {
+          setAvailableCredits((prev) => prev + credits);
+        }
+
+        setLoading(false);
+      },
+
+      theme: {
+        color: "#4f46e5",
+      },
+    };
+
+    const paymentObject = new (window as any).Razorpay(options);
+    paymentObject.open();
+
+    paymentObject.on("payment.failed", function () {
+      setLoading(false);
+    });
+
+  } catch (error) {
+    console.error("Payment error:", error);
+    setLoading(false);
+  }
+};
 
   const handleBack = () => {
     router.back();
   };
 
+  const getChartOption = () => {
+  if (chartType === "bar") {
+    return {
+      xAxis: {
+        type: "category",
+        data: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+      },
+      yAxis: {
+        type: "value",
+      },
+      series: [
+        {
+          data: [
+            120,
+            {
+              value: 200,
+              itemStyle: {
+                color: "#505372",
+              },
+            },
+            150,
+            80,
+            70,
+            110,
+            130,
+          ],
+          type: "bar",
+        },
+      ],
+    };
+  }
+
+  return {
+    xAxis: {
+      type: "category",
+      data: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+    },
+    yAxis: {
+      type: "value",
+    },
+    series: [
+      {
+        data: [820, 932, 901, 934, 1290, 1330, 1320],
+        type: "line",
+        smooth: true,
+      },
+    ],
+  };
+};
+const handleCheckboxChange = (key: string) => {
+  setCleanOptions((prev) => ({
+    ...prev,
+    [key]: !prev[key as keyof typeof prev],
+  }));
+};
+
+const handleCleanSubmit = () => {
+  console.log("Selected cleaning options:", cleanOptions);
+};
+
   return (
-    <div className="w-full min-h-screen bg-gray-50 p-6">
-      <div className="max-w-4xl mx-auto">
+    <>
+    <Script src="https://checkout.razorpay.com/v1/checkout.js" />
+    <div className=" p-6">
+      <div className="w-full h-fullmx-auto">
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-center gap-3">
@@ -49,8 +213,9 @@ export function SettingsPage() {
         </div>
 
         {/* Settings Cards */}
-        <div className="space-y-6">
+        <div className=" w-150m h-150 flex gap-5 flex-wrap">
           {/* User Profile Card */}
+          <div className="w-100 h-110">
           <Card className="shadow-sm">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -64,6 +229,7 @@ export function SettingsPage() {
                 <div>
                   <p className="text-sm font-medium text-slate-600">Logged in as</p>
                   <p className="text-lg font-semibold text-slate-800">{userEmail}</p>
+                  <p className="text-lg font-semibold text-slate-800">{userName}</p>
                 </div>
                 <div className="px-3 py-1 bg-indigo-100 text-indigo-800 rounded-full text-sm font-medium">
                   Active
@@ -71,69 +237,263 @@ export function SettingsPage() {
               </div>
             </CardContent>
           </Card>
+          {/* Data Cleaning Card */}
+<div className="w-100 mt-6">
+  <Card className="shadow-sm rounded-2xl">
+    <CardHeader>
+      <CardTitle className="flex items-center gap-2">
+        🧹 Data Cleaning
+      </CardTitle>
+      <CardDescription>
+        Prepare your dataset before running analytics
+      </CardDescription>
+    </CardHeader>
 
-          {/* Token Usage Card */}
-          <Card className="shadow-sm">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Key className="w-5 h-5" />
-                Token Usage
-              </CardTitle>
-              <CardDescription>Your AI token usage and limits</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              {/* Token Stats */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="p-4 bg-blue-50 rounded-lg">
-                  <p className="text-sm font-medium text-blue-600 mb-1">Total Tokens</p>
-                  <p className="text-2xl font-bold text-blue-800">{totalTokens.toLocaleString()}</p>
-                </div>
-                <div className="p-4 bg-green-50 rounded-lg">
-                  <p className="text-sm font-medium text-green-600 mb-1">Remaining Tokens</p>
-                  <p className="text-2xl font-bold text-green-800">{remainingTokens.toLocaleString()}</p>
-                </div>
-                <div className="p-4 bg-orange-50 rounded-lg">
-                  <p className="text-sm font-medium text-orange-600 mb-1">Used Tokens</p>
-                  <p className="text-2xl font-bold text-orange-800">
-                    {(totalTokens - remainingTokens).toLocaleString()}
-                  </p>
-                </div>
+    <CardContent className="space-y-6">
+
+      {/* Current File */}
+      <div className="p-4 bg-slate-50 rounded-xl border border-slate-200">
+        <p className="text-sm text-slate-500">Current File</p>
+        <p className="font-medium text-slate-800 mt-1">
+          {selectedFile}
+        </p>
+      </div>
+
+      {/* Cleaning Options */}
+      <div className="space-y-4 text-sm">
+
+        <label className="flex items-center justify-between">
+          <span>Keep null values</span>
+          <input
+            type="checkbox"
+            checked={cleanOptions.keepNulls}
+            onChange={() => handleCheckboxChange("keepNulls")}
+          />
+        </label>
+
+        <label className="flex items-center justify-between">
+          <span>Remove duplicate rows</span>
+          <input
+            type="checkbox"
+            checked={cleanOptions.removeDuplicates}
+            onChange={() => handleCheckboxChange("removeDuplicates")}
+          />
+        </label>
+
+        <label className="flex items-center justify-between">
+          <span>Normalize column names</span>
+          <input
+            type="checkbox"
+            checked={cleanOptions.normalizeColumns}
+            onChange={() => handleCheckboxChange("normalizeColumns")}
+          />
+        </label>
+
+        <label className="flex items-center justify-between">
+          <span>Trim whitespace from cells</span>
+          <input
+            type="checkbox"
+            checked={cleanOptions.trimWhitespace}
+            onChange={() => handleCheckboxChange("trimWhitespace")}
+          />
+        </label>
+
+      </div>
+
+      {/* Submit Button */}
+      <Button
+        onClick={handleCleanSubmit}
+        className="w-full bg-slate-900 hover:bg-slate-800 text-white rounded-xl"
+      >
+        Apply Cleaning
+      </Button>
+
+    </CardContent>
+  </Card>
+</div>
+
+
+          </div>
+
+          
+{/* {credits card} */}
+<div className="w-full max-w-4xl">
+  <Card className="rounded-3xl border border-slate-200 shadow-xl bg-white overflow-hidden">
+
+    {/* Top Accent */}
+   
+
+    <CardContent className="pt-5 pb-8 px-8">
+
+      <div className="grid grid-cols-2 gap-10 items-start">
+
+        {/* LEFT SIDE – Credits Summary */}
+        <div className="space-y-6">
+          <div className="space-y-1">
+  <div className="flex items-center gap-2 text-slate-900 font-semibold text-lg">
+    <Wallet className="w-5 h-5 text-slate-600" />
+    Credits
+  </div>
+
+  <p className="text-sm text-slate-500 leading-relaxed max-w-md">
+    Credits are used to run data queries, generate dashboards, and perform predictive analytics.Pay as you Use!
+  </p>
+</div>
+
+
+          <div className="bg-gradient-to-br from-slate-50 to-white border border-slate-200 rounded-2xl p-6 shadow-sm">
+            <p className="text-sm text-slate-500">Available Credits</p>
+            <p className="text-5xl font-bold text-slate-900 mt-2">
+              {availableCredits}
+            </p>
+          </div>
+<Dialog>
+  <DialogTrigger asChild>
+    <Button className="bg-blue-500 hover:bg-blue-600 text-white rounded-xl px-6 shadow-md">
+      Add Credits
+    </Button>
+  </DialogTrigger>
+
+  <DialogContent className="rounded-2xl max-w-md">
+    <DialogHeader>
+      <DialogTitle className="text-lg font-semibold">
+        Purchase Credits
+      </DialogTitle>
+    </DialogHeader>
+
+    <div className="space-y-6 mt-4">
+
+      {/* Increment Field */}
+      <div className="flex items-center justify-between border rounded-xl px-4 py-3">
+        <Button
+          variant="ghost"
+          onClick={() => setCredits((prev) => Math.max(1, prev - 1))}
+          className="text-xl"
+        >
+          -
+        </Button>
+
+        <Input
+          type="number"
+          min="1"
+          value={credits}
+          onChange={(e) => setCredits(Number(e.target.value))}
+          className="text-center border-none focus-visible:ring-0 text-lg font-semibold"
+        />
+
+        <Button
+          variant="ghost"
+          onClick={() => setCredits((prev) => prev + 1)}
+          className="text-xl"
+        >
+          +
+        </Button>
+      </div>
+
+      {/* Purchase Button */}
+      <Button
+        onClick={purchaseCredits}
+        disabled={loading}
+        className="bg-blue-500 hover:bg-blue-600 text-white rounded-xl px-6 shadow-md"
+      >
+        {loading ? "Processing..." : `Purchase ₹${credits}`}
+      </Button>
+
+      <p className="text-xs text-slate-500 text-center">
+        Secure payment powered by Razorpay
+      </p>
+
+    </div>
+  </DialogContent>
+</Dialog>
+
+        </div>
+
+        {/* RIGHT SIDE – History + Analytics */}
+        <div className="space-y-6">
+
+          <div>
+            <p className="text-sm font-semibold text-slate-800 mb-4">
+              Recent Activity
+            </p>
+
+            <div className="space-y-4 text-sm text-slate-600">
+              <div className="flex justify-between border-b pb-2">
+                <span>Jan 24, 2026</span>
+                <span className="text-red-500 font-medium">-50</span>
               </div>
 
-              {/* Progress Bar */}
-              <div className="space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span className="text-slate-600">Usage</span>
-                  <span className="text-slate-800 font-medium">
-                    {Math.round(((totalTokens - remainingTokens) / totalTokens) * 100)}%
-                  </span>
-                </div>
-                <div className="w-full bg-slate-200 rounded-full h-2.5">
-                  <div 
-                    className="bg-gradient-to-r from-blue-500 to-indigo-600 h-2.5 rounded-full"
-                    style={{ width: `${((totalTokens - remainingTokens) / totalTokens) * 100}%` }}
-                  ></div>
-                </div>
-                <p className="text-xs text-slate-500">
-                  You have used {totalTokens - remainingTokens} out of {totalTokens} tokens
-                </p>
+              <div className="flex justify-between border-b pb-2">
+                <span>Feb 12, 2026</span>
+                <span className="text-red-500 font-medium">-400</span>
               </div>
 
-              {/* Token Info */}
-              <div className="p-4 bg-slate-50 rounded-lg border border-slate-200">
-                <h4 className="font-medium text-slate-800 mb-2">How tokens work</h4>
-                <ul className="text-sm text-slate-600 space-y-1">
-                  <li>• Each dashboard generation uses tokens</li>
-                  <li>• Complex queries use more tokens</li>
-                  <li>• Tokens refresh monthly</li>
-                  <li>• Contact support to purchase more tokens</li>
-                </ul>
+              <div className="flex justify-between">
+                <span>Mar 03, 2026</span>
+                <span className="text-red-500 font-medium">-120</span>
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
 
-          {/* Preferences Card */}
-          <Card className="shadow-sm">
+         <Button
+  variant="outline"
+  className="rounded-xl border-slate-300 hover:bg-slate-50"
+  onClick={() => setShowAnalytics((prev) => !prev)}
+>
+  {showAnalytics ? "Hide Usage Analytics" : "View Usage Analytics"}
+</Button>
+
+
+        </div>
+
+      </div>
+
+    </CardContent>
+  </Card>
+  {showAnalytics && (
+  <Card className="mt-5 rounded-3xl border border-slate-200 shadow-lg bg-white shadow-xl overflow-hidden h-120">
+    <CardHeader className="flex flex-row items-center justify-between">
+      <div>
+        <CardTitle>Usage Analytics</CardTitle>
+        <CardDescription>
+          usage trends for your credit consumption
+        </CardDescription>
+      </div>
+
+      {/* Toggle Buttons */}
+      <div className="flex gap-2">
+        <Button
+          size="sm"
+          variant={chartType === "bar" ? "default" : "outline"}
+          onClick={() => setChartType("bar")}
+        >
+          Bar
+        </Button>
+        <Button
+          size="sm"
+          variant={chartType === "line" ? "default" : "outline"}
+          onClick={() => setChartType("line")}
+        >
+          Line
+        </Button>
+      </div>
+    </CardHeader>
+
+    <CardContent>
+      <ReactECharts
+        option={getChartOption()}
+        style={{ height: "350px", width: "100%" }}
+      />
+    </CardContent>
+  </Card>
+)}
+
+</div>
+
+
+{/* 
+          Preferences Card */}
+          {/* <Card className="shadow-sm">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Bell className="w-5 h-5" />
@@ -164,10 +524,10 @@ export function SettingsPage() {
                 </label>
               </div>
             </CardContent>
-          </Card>
+          </Card> */}
 
           {/* System Card */}
-          <Card className="shadow-sm">
+          {/* <Card className="shadow-sm">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Shield className="w-5 h-5" />
@@ -198,9 +558,10 @@ export function SettingsPage() {
                 </Button>
               </div>
             </CardContent>
-          </Card>
+          </Card> */}
         </div>
       </div>
     </div>
+    </>
   );
 }
